@@ -950,7 +950,7 @@ function smsRenderPasskeyCard(int $userId, string $csrfToken, bool $asBox = fals
                     <div id="smsPkAddVerifyPassword" class="sms-pk-verify w-100" hidden>
                         <label class="sms-confirm-label" for="smsPkAddPassword"><?= smsIcon('lock') ?>Password</label>
                         <div class="sms-pw-group password-group">
-                            <input type="password" class="form-control sms-confirm-input" id="smsPkAddPassword" autocomplete="current-password" placeholder="Enter your password">
+                            <input type="password" class="form-control sms-confirm-input" id="smsPkAddPassword" autocomplete="new-password" placeholder="Enter your password">
                             <button class="password-toggle sms-pw-toggle" type="button" data-pw-target="smsPkAddPassword" aria-label="Show password" title="Show password" aria-pressed="false">
                                 <?= smsIcon('eye', ['aria-hidden' => 'true']) ?>
                             </button>
@@ -1000,7 +1000,7 @@ function smsRenderPasskeyCard(int $userId, string $csrfToken, bool $asBox = fals
                     <div id="smsPkVerifyPassword" class="sms-pk-verify w-100" hidden>
                         <label class="sms-confirm-label" for="smsPkPassword"><?= smsIcon('lock') ?>Password</label>
                         <div class="sms-pw-group password-group">
-                            <input type="password" class="form-control sms-confirm-input" id="smsPkPassword" autocomplete="current-password"
+                            <input type="password" class="form-control sms-confirm-input" id="smsPkPassword" autocomplete="new-password"
                                    placeholder="Enter your password">
                             <button class="password-toggle sms-pw-toggle" type="button" data-pw-target="smsPkPassword"
                                     aria-label="Show password" title="Show password" aria-pressed="false">
