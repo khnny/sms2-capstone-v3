@@ -2,7 +2,7 @@
 /**
  * SMS 2 - CRAD - Overview
  */
-require_once __DIR__ . '/../../includes/authentication.php';
+require_once __DIR__ . '/includes/authentication.php';
 
 $cradRoleKey = getCurrentUserRoleKey();
 if ($cradRoleKey === 'department_head') {
@@ -17,7 +17,7 @@ $breadcrumbs  = [
     ['label' => $cradOverviewLabel, 'url' => null],
 ];
 
-require_once __DIR__ . '/../../includes/breadcrumbs.php';
-require_once __DIR__ . '/../../includes/layout-start.php';
-require_once __DIR__ . '/../../includes/module-index-grid.php';
-require_once __DIR__ . '/../../includes/layout-end.php';
+require_once __DIR__ . '/includes/breadcrumbs.php';
+require_once __DIR__ . '/includes/layout-start.php';
+require_once __DIR__ . '/includes/module-index-grid.php';
+require_once __DIR__ . '/includes/layout-end.php';

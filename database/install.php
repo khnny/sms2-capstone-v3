@@ -16,7 +16,7 @@ $isCli = (PHP_SAPI === 'cli');
 if (!$isCli) {
     http_response_code(403);
     header('Content-Type: text/plain; charset=utf-8');
-    echo "Forbidden. Run from CLI only:\n  C:\\xampp\\php\\php.exe database/install.php\n";
+    echo "Forbidden. Run from CLI only:\n  php database/install.php\n";
     exit(1);
 }
 

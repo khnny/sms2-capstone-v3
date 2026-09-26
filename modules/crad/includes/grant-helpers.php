@@ -409,7 +409,7 @@ function _grantBackfillProposalReferences(PDO $crad): void
 function _grantBackfillApplicantUserIds(PDO $crad): void
 {
     if (!function_exists('db')) {
-        require_once dirname(__DIR__, 2) . '/config/database.php';
+        require_once dirname(__DIR__, 3) . '/config/database.php';
     }
 
     $main = db();
