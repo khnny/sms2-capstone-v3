@@ -5,13 +5,13 @@
  * Live hf_db_162pzmvl has every sms2_users column this insert uses, including
  * password_changed_at and notes, and its role rows include crad_officer (the
  * form value "crad" is normalized to that key before the foreign key check).
- * A partial import can still leave id as a plain integer. Insert then fails
- * with 1364, which the old mapper did not recognize, so Add User showed only
- * the generic "database rejected it" fallback. The create path restores
- * AUTO_INCREMENT when ALTER is allowed; otherwise the message names
- * database/patches/fix_users_autoincrement.sql. Student saves can hit the same
- * fallback when profile DDL implicitly commits and the later commit() finds
- * no transaction.
+ * A partial import can still leave id as a plain integer, sometimes with no
+ * primary key. Insert then fails with 1364, and ALTER ... AUTO_INCREMENT fails
+ * with 1075 until id is a key. The create path adds a PRIMARY KEY on id when
+ * the table has none, then restores AUTO_INCREMENT when ALTER is allowed.
+ * Otherwise the message names database/patches/fix_users_autoincrement.sql.
+ * Student saves can hit the same fallback when profile DDL implicitly commits
+ * and the later commit() finds no transaction.
  */
 declare(strict_types=1);
 
@@ -142,8 +142,9 @@ function umRepairSms2UsersForAccountWrite(PDO $pdo, array $columns): array
 }
 
 /**
- * HostForge dumps often keep the id column and drop AUTO_INCREMENT.
- * Insert then fails with 1364 even though every other column exists.
+ * HostForge dumps often keep the id column and drop its key and AUTO_INCREMENT.
+ * Insert then fails with 1364. MODIFY ... AUTO_INCREMENT fails with 1075 until
+ * id is a key, so a missing primary key is added first.
  */
 function umEnsureTableIdAutoIncrement(PDO $pdo, string $table): void
 {
@@ -159,6 +160,9 @@ function umEnsureTableIdAutoIncrement(PDO $pdo, string $table): void
     try {
         $stmt = $pdo->query('SHOW COLUMNS FROM `' . $table . "` LIKE 'id'");
         $col = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+        if ($stmt) {
+            $stmt->closeCursor();
+        }
         if (!is_array($col)) {
             return;
         }
@@ -166,17 +170,46 @@ function umEnsureTableIdAutoIncrement(PDO $pdo, string $table): void
         if (str_contains($extra, 'auto_increment')) {
             return;
         }
-        $keyStmt = $pdo->query('SHOW KEYS FROM `' . $table . "` WHERE Key_name = 'PRIMARY'");
-        $hasPk = $keyStmt && (bool) $keyStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$hasPk) {
-            $pdo->exec('ALTER TABLE `' . $table . '` ADD PRIMARY KEY (`id`)');
-        }
         $type = (string) ($col['Type'] ?? 'int(10) unsigned');
         if (preg_match('/^[a-z0-9(), ]+$/i', $type) !== 1) {
             $type = 'int(10) unsigned';
         }
-        $nullable = strtoupper((string) ($col['Null'] ?? 'NO')) === 'YES' ? 'NULL' : 'NOT NULL';
-        $pdo->exec('ALTER TABLE `' . $table . '` MODIFY `id` ' . $type . ' ' . $nullable . ' AUTO_INCREMENT');
+        if (strtoupper((string) ($col['Null'] ?? 'NO')) === 'YES') {
+            $pdo->exec('ALTER TABLE `' . $table . '` MODIFY `id` ' . $type . ' NOT NULL');
+        }
+
+        $keyStmt = $pdo->query('SHOW KEYS FROM `' . $table . '`');
+        $keys = $keyStmt ? $keyStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+        if ($keyStmt) {
+            $keyStmt->closeCursor();
+        }
+        $hasPrimary = false;
+        $primaryOnId = false;
+        $idIsIndexed = false;
+        foreach ($keys as $key) {
+            if (!is_array($key)) {
+                continue;
+            }
+            $column = strtolower((string) ($key['Column_name'] ?? ''));
+            if ((string) ($key['Key_name'] ?? '') === 'PRIMARY') {
+                $hasPrimary = true;
+                if ($column === 'id') {
+                    $primaryOnId = true;
+                }
+            }
+            if ($column === 'id') {
+                $idIsIndexed = true;
+            }
+        }
+        if (!$hasPrimary) {
+            $pdo->exec('ALTER TABLE `' . $table . '` ADD PRIMARY KEY (`id`)');
+            error_log('save-user schema repair added PRIMARY KEY on ' . $table . '.id');
+        } elseif (!$primaryOnId && !$idIsIndexed) {
+            $pdo->exec('ALTER TABLE `' . $table . '` ADD KEY `idx_' . $table . '_id` (`id`)');
+            error_log('save-user schema repair added KEY on ' . $table . '.id');
+        }
+
+        $pdo->exec('ALTER TABLE `' . $table . '` MODIFY `id` ' . $type . ' NOT NULL AUTO_INCREMENT');
         error_log('save-user schema repair set ' . $table . '.id AUTO_INCREMENT');
     } catch (Throwable $e) {
         error_log('save-user schema repair could not set ' . $table . '.id AUTO_INCREMENT: ' . $e->getMessage());
@@ -278,7 +311,7 @@ function umUserInsertStatement(array $columns, array $fields): array
         $extra = strtolower((string) ($columns['id']['Extra'] ?? ''));
         if (!str_contains($extra, 'auto_increment') && !umColumnHasDefault($columns['id']) && !umColumnIsNullable($columns['id'])) {
             throw new InvalidArgumentException(
-                'The users table id column is missing AUTO_INCREMENT, so a new account cannot be saved. Nothing was changed. Run database/patches/fix_users_autoincrement.sql.'
+                'The users table id column is missing AUTO_INCREMENT, so a new account cannot be saved. Nothing was changed. Run database/patches/fix_users_autoincrement.sql (it adds a PRIMARY KEY on id when that key is missing, then sets AUTO_INCREMENT).'
             );
         }
     }
@@ -460,10 +493,13 @@ function umMapPublicDbError(PDOException $e): string
     }
     if ($is(1364, 'HY000', "doesn't have a default value") && ($errno === 1364 || str_contains(strtolower($full), "doesn't have a default value") || preg_match('/\b1364\b/', $full) === 1)) {
         if ($column === 'id' || str_ends_with($column, '.id')) {
-            return 'The users table id column is missing AUTO_INCREMENT, so the account was not saved. Run database/patches/fix_users_autoincrement.sql.';
+            return 'The users table id column is missing AUTO_INCREMENT, so the account was not saved. Run database/patches/fix_users_autoincrement.sql (it adds a PRIMARY KEY on id when that key is missing, then sets AUTO_INCREMENT).';
         }
         $named = $column !== '' ? $column : 'a required column';
         return 'The users table column ' . $named . ' has no default value, so the account was not saved.';
+    }
+    if ($is(1075, '42000', 'must be defined as a key') && ($errno === 1075 || str_contains(strtolower($full), 'must be defined as a key') || preg_match('/\b1075\b/', $full) === 1)) {
+        return 'The users table id column is not a key, so it cannot be AUTO_INCREMENT and the account was not saved. Run database/patches/fix_users_autoincrement.sql.';
     }
     if ($is(1048, '23000', 'cannot be null') && ($errno === 1048 || str_contains(strtolower($full), 'cannot be null') || preg_match('/\b1048\b/', $full) === 1)) {
         $named = $column !== '' ? $column : 'a required field';
