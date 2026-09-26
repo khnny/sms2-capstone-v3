@@ -1,9 +1,12 @@
 # CRAD demo data
 
 This folder seeds fictional CRAD workflow examples into the existing
-consolidated `sms2_db` database. It does not create a separate CRAD database or
-change application roles, permissions, PHP files, or existing table
-definitions.
+consolidated SMS2 database (both `sms2_*` and `crad_*` tables). Select the
+database configured for the application before importing; `sms2_db` is the
+local development name, while a host may assign a different database name.
+These scripts do not select or create a database, create a separate CRAD
+database, or change application roles, permissions, PHP files, or existing
+table definitions.
 
 The batch identifier is `CRAD_DEMO_2026_01`. The only persistent DDL is
 `CREATE TABLE IF NOT EXISTS crad_demo_seed_records`, the ID registry used for
@@ -24,7 +27,7 @@ own transaction. `12_demo_analytics.sql` is read-only validation.
 | 1 | `00_demo_setup.sql` | Create the batch registry if needed; verify required consolidated tables and existing role keys. | 0 |
 | 2 | `01_demo_users.sql` | Seed 108 fictional logins and 80 student profiles; reject unregistered username/email collisions. | 188 |
 | 3 | `02_demo_research_groups.sql` | Seed 16 registration groups and 80 group-member rows. | 96 |
-| 4 | `03_demo_assignments.sql` | Seed coordinator/adviser assignment rows and confirmation-cycle histories. | 43 |
+| 4 | `03_demo_assignments.sql` | Preflight expected users, groups, members, and all assignment columns; then seed coordinator/adviser assignments and confirmation-cycle histories. Prints missing columns before stopping if the deployed schema is incomplete. | 43 |
 | 5 | `04_demo_title_approvals.sql` | Seed the eight connected title submissions and approval/screening scenarios. | 8 |
 | 6 | `05_demo_proposals.sql` | Seed four official proposals/groups, 20 official group members, four clearances, and four research plans. | 36 |
 | 7 | `06_demo_chapters.sql` | Seed 12 chapter submissions, 11 evaluations, and 48 chapter notifications. | 71 |
@@ -40,6 +43,12 @@ The expected total is **607 batch-registered records** after the final stage.
 These estimates are the number of newly registered demo rows from a clean
 baseline; re-running a completed stage should reuse its registry keys and not
 increase the total.
+
+The SQL sequence was exercised against MariaDB 10.4.32; the inspected deployed
+schema export was MariaDB 11.8. The repository's Dockerfiles pin PHP but do not
+pin a database-server version, and a live HostForge import was not available for
+reproduction. The target must be MySQL/MariaDB-compatible and expose the
+assignment columns checked by stage 03.
 
 ```text
 00_demo_setup.sql
@@ -63,21 +72,29 @@ Use a **disposable clone** of the exported consolidated `sms2_db` for testing.
 The supplied deployed export was inspected as a schema/workflow source; it was
 not imported into or changed. Do not experiment on the live database.
 
-1. Back up the complete `sms2_db` database and record baseline counts for
-   `sms2_users`, `sms2_student_profiles`, `crad_research_groups`,
+1. Back up the complete consolidated application database and record baseline
+   counts for `sms2_users`, `sms2_student_profiles`, `crad_research_groups`,
    `crad_title_approvals`, and the process tables listed below. Keep the backup
    outside this demo folder.
 2. Restore that backup to a disposable MySQL/MariaDB instance, retaining the
-   database name `sms2_db` and both the `sms2_*` and `crad_*` tables.
+   application-configured database and both the `sms2_*` and `crad_*` tables.
 3. Import `00_demo_setup.sql`, then import files `01` through `12` **one at a
    time** in the exact sequence above. Use a client/panel that stops on the
    first SQL error; do not use a “continue on error” option. For a command-line
    import in `cmd.exe`, run one command per file:
 
+   Select the application's existing consolidated database in phpMyAdmin
+   before each file import. For command-line imports, explicitly pass that
+   configured database name; replace `YOUR_CONSOLIDATED_DB` with the name from
+   the application environment (for example, HostForge's assigned name):
+
    ```bat
-   mysql.exe --batch --user=YOUR_DB_USER --password --default-character-set=utf8mb4 < database\crad_demo\00_demo_setup.sql
-   mysql.exe --batch --user=YOUR_DB_USER --password --default-character-set=utf8mb4 < database\crad_demo\01_demo_users.sql
+   mysql.exe --batch --user=YOUR_DB_USER --password --default-character-set=utf8mb4 --database=YOUR_CONSOLIDATED_DB < database\crad_demo\00_demo_setup.sql
+   mysql.exe --batch --user=YOUR_DB_USER --password --default-character-set=utf8mb4 --database=YOUR_CONSOLIDATED_DB < database\crad_demo\01_demo_users.sql
    ```
+
+   The SQL intentionally has no `USE sms2_db` statement, so it cannot silently
+   switch away from the selected application database.
 
    Continue with the next filename only after the current import exits
    successfully and displays its completion result. Use the hosting panel's
@@ -90,6 +107,46 @@ not imported into or changed. Do not experiment on the live database.
    confirmed, run `99_demo_reset.sql` and restart at `00_demo_setup.sql`.
    Prerequisite failures intentionally stop the import rather than producing
    partially connected later-stage records.
+   If the panel displays only a generic failure message for
+   `03_demo_assignments.sql`, run this read-only check in the selected
+   application database and compare the output with the expected 108 users,
+   16 groups, and 80 member rows:
+
+   ```sql
+   SELECT table_name, COUNT(*) AS demo_records
+   FROM crad_demo_seed_records
+   WHERE batch_id = 'CRAD_DEMO_2026_01'
+     AND table_name IN (
+       'sms2_users','sms2_student_profiles','crad_research_groups',
+       'crad_research_group_members'
+     )
+   GROUP BY table_name
+   ORDER BY table_name;
+
+   SELECT table_name, column_name
+   FROM (
+     SELECT 'crad_research_coordinator_assignments' AS table_name,
+            'confirmation_status' AS column_name
+     UNION ALL
+     SELECT 'crad_research_adviser_assignments','confirmation_status'
+     UNION ALL
+     SELECT 'crad_research_assignment_cycles','coordinator_confirmed_at'
+   ) required
+   LEFT JOIN information_schema.columns actual
+     ON actual.table_schema = DATABASE()
+    AND actual.table_name = required.table_name
+    AND actual.column_name = required.column_name
+   WHERE actual.column_name IS NULL;
+   ```
+
+   The first query should show 108 `sms2_users`, 80
+   `sms2_student_profiles`, 16 registered placeholder groups, and 80 registered
+   members. The second query should return no rows. In `03_demo_assignments.sql`,
+   the preflight resultset also lists any missing assignment columns before the
+   prerequisite guard prevents the assignment writes. If all checks pass but
+   the panel still shows a generic failure, capture the import's SQL error and
+   failing statement/line from the panel's details or server error log; the
+   generic message alone cannot identify a statement-level cause.
 5. After `12_demo_analytics.sql`, its validation result must be
    `CRAD demo prerequisite checks passed`. Check the counts in **Final
    verification checklist** and compare pre-import baseline counts to ensure

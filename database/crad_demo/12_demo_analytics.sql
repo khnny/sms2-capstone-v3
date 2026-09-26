@@ -1,6 +1,5 @@
 -- Read-only verification and analytics checks; requires all 13 import stages to have succeeded.
 
-USE `sms2_db`;
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET @crad_demo_batch := 'CRAD_DEMO_2026_01';
 SET @crad_demo_password_hash := '$2y$10$aw6AyQoVQN0GjjC5sEbi9.rHyehQzN2B7MqWSS9HuZs/3XT2Mslv.';

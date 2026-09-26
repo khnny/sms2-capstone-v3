@@ -1,7 +1,6 @@
 -- Remove only the CRAD demo batch and test-created records attached to its
 -- registered fictional students/groups. Back up sms2_db before running.
 
-USE `sms2_db`;
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET @crad_demo_batch := 'CRAD_DEMO_2026_01';
 START TRANSACTION;

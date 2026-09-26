@@ -1,6 +1,5 @@
 -- 03_demo_assignments.sql: dependency-ordered CRAD demo stage; batch CRAD_DEMO_2026_01.
 
-USE `sms2_db`;
 SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 SET @crad_demo_batch := 'CRAD_DEMO_2026_01';
 SET @crad_demo_password_hash := '$2y$10$aw6AyQoVQN0GjjC5sEbi9.rHyehQzN2B7MqWSS9HuZs/3XT2Mslv.';
@@ -165,7 +164,122 @@ CREATE TEMPORARY TABLE `tmp_crad_demo_stage_guard` (`guard_id` tinyint unsigned 
 
 INSERT INTO `tmp_crad_demo_stage_guard` VALUES (1);
 
-INSERT INTO `tmp_crad_demo_stage_guard` SELECT IF((SELECT COUNT(*) FROM crad_demo_seed_records WHERE batch_id=@crad_demo_batch AND record_key LIKE 'group:%')=16 AND (SELECT COUNT(*) FROM crad_demo_seed_records WHERE batch_id=@crad_demo_batch AND record_key LIKE 'member:%')=80,2,1);
+-- Report missing assignment columns before the precondition guard stops this file.
+SELECT required.table_name,required.column_name AS missing_column
+FROM (
+  SELECT 'crad_research_coordinator_assignments' AS table_name,'research_group_id' AS column_name
+  UNION ALL SELECT 'crad_research_coordinator_assignments','group_number'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','group_name'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','research_title'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','student_id'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','coordinator_user_id'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','coordinator_name'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','coordinator_email'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','status'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','confirmation_status'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','confirmed_at'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','confirmed_by'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','assigned_by'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','assigned_at'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','created_at'
+  UNION ALL SELECT 'crad_research_coordinator_assignments','updated_at'
+  UNION ALL SELECT 'crad_research_adviser_assignments','research_group_id'
+  UNION ALL SELECT 'crad_research_adviser_assignments','group_number'
+  UNION ALL SELECT 'crad_research_adviser_assignments','student_id'
+  UNION ALL SELECT 'crad_research_adviser_assignments','adviser_name'
+  UNION ALL SELECT 'crad_research_adviser_assignments','adviser_email'
+  UNION ALL SELECT 'crad_research_adviser_assignments','adviser_user_id'
+  UNION ALL SELECT 'crad_research_adviser_assignments','expertise'
+  UNION ALL SELECT 'crad_research_adviser_assignments','availability_status'
+  UNION ALL SELECT 'crad_research_adviser_assignments','assignment_status'
+  UNION ALL SELECT 'crad_research_adviser_assignments','confirmation_status'
+  UNION ALL SELECT 'crad_research_adviser_assignments','confirmed_at'
+  UNION ALL SELECT 'crad_research_adviser_assignments','confirmed_by'
+  UNION ALL SELECT 'crad_research_adviser_assignments','notes'
+  UNION ALL SELECT 'crad_research_adviser_assignments','assigned_by'
+  UNION ALL SELECT 'crad_research_adviser_assignments','assigned_at'
+  UNION ALL SELECT 'crad_research_adviser_assignments','created_at'
+  UNION ALL SELECT 'crad_research_adviser_assignments','updated_at'
+  UNION ALL SELECT 'crad_research_assignment_cycles','research_group_id'
+  UNION ALL SELECT 'crad_research_assignment_cycles','group_number'
+  UNION ALL SELECT 'crad_research_assignment_cycles','student_id'
+  UNION ALL SELECT 'crad_research_assignment_cycles','coordinator_assignment_id'
+  UNION ALL SELECT 'crad_research_assignment_cycles','adviser_assignment_id'
+  UNION ALL SELECT 'crad_research_assignment_cycles','status'
+  UNION ALL SELECT 'crad_research_assignment_cycles','coordinator_confirmed_at'
+  UNION ALL SELECT 'crad_research_assignment_cycles','coordinator_confirmed_by'
+  UNION ALL SELECT 'crad_research_assignment_cycles','adviser_confirmed_at'
+  UNION ALL SELECT 'crad_research_assignment_cycles','adviser_confirmed_by'
+  UNION ALL SELECT 'crad_research_assignment_cycles','cancelled_at'
+  UNION ALL SELECT 'crad_research_assignment_cycles','cancelled_by'
+  UNION ALL SELECT 'crad_research_assignment_cycles','cancel_role'
+  UNION ALL SELECT 'crad_research_assignment_cycles','cancel_reason'
+  UNION ALL SELECT 'crad_research_assignment_cycles','assigned_by'
+  UNION ALL SELECT 'crad_research_assignment_cycles','created_at'
+  UNION ALL SELECT 'crad_research_assignment_cycles','updated_at'
+) AS required
+LEFT JOIN information_schema.columns actual
+  ON actual.table_schema=DATABASE()
+ AND actual.table_name=required.table_name
+ AND actual.column_name=required.column_name
+WHERE actual.column_name IS NULL;
+
+-- A failed guard raises a duplicate-key SQL error before assignment writes begin.
+INSERT INTO `tmp_crad_demo_stage_guard`
+SELECT IF(
+  (SELECT COUNT(*) FROM `crad_demo_seed_records`
+   WHERE batch_id=@crad_demo_batch AND record_key LIKE 'group:%')=16
+  AND (SELECT COUNT(*) FROM `crad_demo_seed_records`
+       WHERE batch_id=@crad_demo_batch AND record_key LIKE 'member:%')=80
+  AND (SELECT COUNT(*) FROM `tmp_crad_demo_people` p
+       JOIN `sms2_users` u ON u.username=p.username AND u.role_key=p.role_key
+       JOIN `crad_demo_seed_records` r
+         ON r.batch_id=@crad_demo_batch AND r.record_key=p.record_key
+        AND r.table_name='sms2_users' AND r.record_id=u.id)=108
+  AND (SELECT COUNT(*) FROM `tmp_crad_demo_project` p
+       JOIN `crad_demo_seed_records` r
+         ON r.batch_id=@crad_demo_batch
+        AND r.record_key=CONCAT('group:',LPAD(p.project_no,2,'0'))
+        AND r.table_name='crad_research_groups'
+       JOIN `crad_research_groups` g
+         ON g.id=r.record_id AND g.group_number=p.placeholder_number)=16
+  AND (SELECT COUNT(*) FROM `tmp_crad_demo_project` p
+       JOIN `crad_demo_seed_records` g
+         ON g.batch_id=@crad_demo_batch
+        AND g.record_key=CONCAT('group:',LPAD(p.project_no,2,'0'))
+        AND g.table_name='crad_research_groups'
+       JOIN `tmp_crad_demo_slots` s
+       JOIN `tmp_crad_demo_people` student
+         ON student.project_no=p.project_no
+        AND student.student_seq=(p.project_no-1)*5+s.slot_no
+       JOIN `crad_demo_seed_records` r
+         ON r.batch_id=@crad_demo_batch
+        AND r.record_key=CONCAT('member:',LPAD(p.project_no,2,'0'),':',s.slot_no)
+        AND r.table_name='crad_research_group_members'
+       JOIN `crad_research_group_members` m
+         ON m.id=r.record_id AND m.research_group_id=g.record_id
+        AND m.student_id=student.student_id)=80
+  AND (SELECT COUNT(*) FROM information_schema.columns
+       WHERE table_schema=DATABASE()
+         AND ((table_name='crad_research_coordinator_assignments'
+               AND column_name IN ('research_group_id','group_number','group_name','research_title',
+                                   'student_id','coordinator_user_id','coordinator_name','coordinator_email',
+                                   'status','confirmation_status','confirmed_at','confirmed_by',
+                                   'assigned_by','assigned_at','created_at','updated_at'))
+           OR (table_name='crad_research_adviser_assignments'
+               AND column_name IN ('research_group_id','group_number','student_id','adviser_name',
+                                   'adviser_email','adviser_user_id','expertise','availability_status',
+                                   'assignment_status','confirmation_status','confirmed_at','confirmed_by',
+                                   'notes','assigned_by','assigned_at','created_at','updated_at'))
+           OR (table_name='crad_research_assignment_cycles'
+               AND column_name IN ('research_group_id','group_number','student_id',
+                                   'coordinator_assignment_id','adviser_assignment_id','status',
+                                   'coordinator_confirmed_at','coordinator_confirmed_by',
+                                   'adviser_confirmed_at','adviser_confirmed_by','cancelled_at',
+                                   'cancelled_by','cancel_role','cancel_reason','assigned_by',
+                                   'created_at','updated_at'))))=50,
+  2,1
+);
 
 START TRANSACTION;
 
@@ -173,6 +287,7 @@ CREATE TEMPORARY TABLE `tmp_crad_demo_guard` (`guard_id` tinyint unsigned NOT NU
 
 INSERT INTO `tmp_crad_demo_guard` VALUES (1);
 
+-- SECTION: coordinator assignments (14 expected; coordinator confirmation states).
 INSERT INTO `crad_research_coordinator_assignments`
   (`research_group_id`,`group_number`,`group_name`,`research_title`,`student_id`,
    `coordinator_user_id`,`coordinator_name`,`coordinator_email`,`status`,
@@ -197,6 +312,7 @@ AND NOT EXISTS (
   WHERE r.batch_id=@crad_demo_batch AND r.record_key=CONCAT('coord:',LPAD(p.project_no,2,'0'))
 );
 
+-- Register every coordinator assignment by the deterministic group key.
 INSERT INTO `crad_demo_seed_records` (`batch_id`,`record_key`,`table_name`,`record_id`)
 SELECT @crad_demo_batch,CONCAT('coord:',LPAD(p.project_no,2,'0')),
        'crad_research_coordinator_assignments',a.id
@@ -212,6 +328,7 @@ AND NOT EXISTS (
   WHERE r.batch_id=@crad_demo_batch AND r.record_key=CONCAT('coord:',LPAD(p.project_no,2,'0'))
 );
 
+-- SECTION: adviser assignments (14 expected; adviser confirmation states).
 INSERT INTO `crad_research_adviser_assignments`
   (`research_group_id`,`group_number`,`student_id`,`adviser_name`,`adviser_email`,`adviser_user_id`,
    `expertise`,`availability_status`,`assignment_status`,`confirmation_status`,`confirmed_at`,
@@ -239,6 +356,7 @@ AND NOT EXISTS (
   WHERE r.batch_id=@crad_demo_batch AND r.record_key=CONCAT('adviser:',LPAD(p.project_no,2,'0'))
 );
 
+-- Register every adviser assignment by the deterministic group key.
 INSERT INTO `crad_demo_seed_records` (`batch_id`,`record_key`,`table_name`,`record_id`)
 SELECT @crad_demo_batch,CONCAT('adviser:',LPAD(p.project_no,2,'0')),
        'crad_research_adviser_assignments',a.id
@@ -252,6 +370,7 @@ AND NOT EXISTS (
   WHERE r.batch_id=@crad_demo_batch AND r.record_key=CONCAT('adviser:',LPAD(p.project_no,2,'0'))
 );
 
+-- SECTION: assignment cycles (15 expected; both sides reference registry IDs).
 INSERT INTO `crad_research_assignment_cycles`
   (`research_group_id`,`group_number`,`student_id`,`coordinator_assignment_id`,`adviser_assignment_id`,
    `status`,`coordinator_confirmed_at`,`coordinator_confirmed_by`,`adviser_confirmed_at`,
@@ -280,6 +399,7 @@ AND NOT EXISTS (
   WHERE r.batch_id=@crad_demo_batch AND r.record_key=CONCAT('cycle:',LPAD(p.project_no,2,'0'))
 );
 
+-- Register each cycle only after its group and assignment rows exist.
 INSERT INTO `crad_demo_seed_records` (`batch_id`,`record_key`,`table_name`,`record_id`)
 SELECT @crad_demo_batch,CONCAT('cycle:',LPAD(p.project_no,2,'0')),
        'crad_research_assignment_cycles',c.id
@@ -297,4 +417,11 @@ AND NOT EXISTS (
 
 COMMIT;
 
-SELECT '03_demo_assignments.sql complete' AS stage, COUNT(*) AS batch_registry_records FROM crad_demo_seed_records WHERE batch_id=@crad_demo_batch;
+-- SECTION: post-import counts; these must be 14 coordinator, 14 adviser, 15 cycle rows.
+SELECT
+  (SELECT COUNT(*) FROM `crad_demo_seed_records`
+   WHERE batch_id=@crad_demo_batch AND table_name='crad_research_coordinator_assignments') AS coordinator_assignments,
+  (SELECT COUNT(*) FROM `crad_demo_seed_records`
+   WHERE batch_id=@crad_demo_batch AND table_name='crad_research_adviser_assignments') AS adviser_assignments,
+  (SELECT COUNT(*) FROM `crad_demo_seed_records`
+   WHERE batch_id=@crad_demo_batch AND table_name='crad_research_assignment_cycles') AS assignment_cycles;
