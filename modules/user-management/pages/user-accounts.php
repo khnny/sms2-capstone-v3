@@ -40,6 +40,11 @@ $archivedCount = 0;
 $activeCount = 0;
 $pdo = db();
 if ($pdo) {
+    require_once __DIR__ . '/../includes/user-account-schema.php';
+    $userColumns = umSms2UsersColumns($pdo);
+    if ($userColumns !== null) {
+        umRepairSms2UsersForAccountWrite($pdo, $userColumns);
+    }
     try {
         $pdo->prepare(
             "INSERT IGNORE INTO `sms2_roles` (role_key, label, description, is_system)

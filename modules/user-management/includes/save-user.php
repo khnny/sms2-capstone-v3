@@ -9,6 +9,7 @@ require_once __DIR__ . '/../../../config/config.php';
 require_once ROOT_PATH . '/includes/authentication.php';
 require_once ROOT_PATH . '/includes/security.php';
 require_once ROOT_PATH . '/includes/security-workflow.php';
+require_once __DIR__ . '/user-account-schema.php';
 
 ini_set('display_errors', '0');
 if (ob_get_level() === 0) {
@@ -196,37 +197,6 @@ function umAssertUniqueAccount(PDO $pdo, string $username, string $email, int $i
     }
 }
 
-function umPublicDbError(PDOException $e): string
-{
-    error_log('save-user PDO: ' . $e->getMessage());
-    $msg = $e->getMessage();
-    if (str_contains($msg, '1452') || str_contains(strtolower($msg), 'foreign key')) {
-        return 'That role is not available in the database yet. Refresh User Accounts and try again.';
-    }
-    if (str_contains($msg, '1406') || str_contains($msg, 'Data too long')) {
-        return 'One of the fields is too long. Shorten the name, username, email, or notes and try again.';
-    }
-    if (str_contains($msg, 'uq_users_username') || str_contains($msg, "for key 'username'")) {
-        return 'That username is already in use. Choose a different username.';
-    }
-    if (str_contains($msg, 'uq_users_email') || str_contains($msg, "for key 'email'")) {
-        return 'That email address is already in use. Choose a different email.';
-    }
-    if (str_contains($msg, 'uniq_raa_adviser_identity')) {
-        return 'An adviser assignment with this name and email already exists, so the account was not created.';
-    }
-    if (str_contains($msg, 'uniq_rca_')) {
-        return 'A research coordinator assignment already exists for this account, so the user was not created.';
-    }
-    if (str_contains($msg, 'Duplicate') || str_contains($msg, '1062')) {
-        return 'That username or email is already in use.';
-    }
-    if (str_contains($msg, '1265') || str_contains($msg, '1264')) {
-        return 'The status or role is not valid for a user account.';
-    }
-
-    return 'The account could not be saved because the database rejected it. Nothing was changed.';
-}
 
 /**
  * Ensure the optional users.id link column exists on the adviser assignment
@@ -501,20 +471,40 @@ try {
         $studentId = strtoupper($username);
     }
 
+    $userColumns = umSms2UsersColumns($pdo);
+    if ($userColumns !== null) {
+        $userColumns = umRepairSms2UsersForAccountWrite($pdo, $userColumns);
+    }
+    $accountFields = [
+        'username' => $username,
+        'email' => $email,
+        'full_name' => $fullName,
+        'role_key' => $role,
+        'status' => $status,
+        'student_id' => $studentId,
+        'notes' => $notes,
+    ];
+
     if ($id > 0) {
         $passwordUpdated = false;
         if ($password !== '' && $status === 'locked') {
             $status = 'active';
         }
-        $updateSql = 'UPDATE `sms2_users` SET full_name=?, username=?, email=?, role_key=?, status=?, notes=?';
-        $updateParams = [$fullName, $username, $email, $role, $status, $notes !== '' ? $notes : null];
-        if ($studentId !== null) {
-            $updateSql .= ', student_id=?';
-            $updateParams[] = $studentId;
+        $accountFields['status'] = $status;
+        if ($userColumns === null) {
+            $updateSql = 'UPDATE `sms2_users` SET full_name=?, username=?, email=?, role_key=?, status=?, notes=?';
+            $updateParams = [$fullName, $username, $email, $role, $status, $notes !== '' ? $notes : null];
+            if ($studentId !== null) {
+                $updateSql .= ', student_id=?';
+                $updateParams[] = $studentId;
+            }
+            $updateSql .= ' WHERE id=?';
+            $updateParams[] = $id;
+            $pdo->prepare($updateSql)->execute($updateParams);
+        } else {
+            $update = umUserUpdateStatement($userColumns, $accountFields, $id);
+            $pdo->prepare($update['sql'])->execute($update['params']);
         }
-        $updateSql .= ' WHERE id=?';
-        $updateParams[] = $id;
-        $pdo->prepare($updateSql)->execute($updateParams);
         if ($password !== '') {
             umApplyUserPassword($id, $password);
             $passwordUpdated = true;
@@ -556,22 +546,32 @@ try {
         throw new InvalidArgumentException($strength['message']);
     }
 
+    $accountFields['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
+    $insert = null;
+    if ($userColumns !== null) {
+        $insert = umUserInsertStatement($userColumns, $accountFields);
+    }
+
     $pdo->beginTransaction();
     try {
-        $stmt = $pdo->prepare(
-            'INSERT INTO `sms2_users` (username, email, password_hash, full_name, role_key, student_id, status, notes, password_changed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())'
-        );
-        $stmt->execute([
-            $username,
-            $email,
-            password_hash($password, PASSWORD_DEFAULT),
-            $fullName,
-            $role,
-            $studentId,
-            $status,
-            $notes !== '' ? $notes : null,
-        ]);
+        if ($insert === null) {
+            $stmt = $pdo->prepare(
+                'INSERT INTO `sms2_users` (username, email, password_hash, full_name, role_key, student_id, status, notes, password_changed_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+            );
+            $stmt->execute([
+                $username,
+                $email,
+                $accountFields['password_hash'],
+                $fullName,
+                $role,
+                $studentId,
+                $status,
+                $notes !== '' ? $notes : null,
+            ]);
+        } else {
+            $pdo->prepare($insert['sql'])->execute($insert['params']);
+        }
 
         $newUserId = (int) $pdo->lastInsertId();
         rcSyncAssignmentFromUserAccount($newUserId, $role, $fullName, $email, $status);
