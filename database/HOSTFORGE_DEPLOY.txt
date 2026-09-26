@@ -102,6 +102,25 @@ the release can accept new uploads. New images are stored in managed MySQL,
 so they survive container rebuilds and redeployments.
 
 
+STEP 4c — Repair HostForge schema drift (once after deploy)
+-----------------------------------------------------------
+Do not run the old patch one-liners separately. From the HostForge web
+terminal, once per deploy:
+
+  php database/tools/hostforge_repair.php
+
+That command applies every additive repair, in order:
+  - sms2_users.id primary key, then AUTO_INCREMENT (errors 1364 and 1075)
+  - sms2_users account columns the Add User form writes
+  - sms2_user_passkeys id AUTO_INCREMENT (and credential_id width)
+  - sms2_activity_logs id AUTO_INCREMENT
+  - research group flow tables and columns
+
+It does not drop tables, delete rows, or pass --fresh. Duplicate column,
+table, and key errors are skipped. The command ends with a short smoke
+check and prints Repair OK.
+
+
 STEP 5 — First admin
 --------------------
 Open:
@@ -115,7 +134,7 @@ with an existing account instead.
 
 STEP 6 — Verify
 ---------------
-Web terminal:
+Web terminal (repair already smokes; this is the check alone):
   php database/tools/smoke_single_db.php
 
 Expect:
@@ -153,6 +172,12 @@ Troubleshooting
 "Unknown table users" / "sms2_users"
   → Migration not run, or PHP code/DB prefix mismatch. Re-deploy latest main
     then run migrate / migrate_to_single_prefixed.
+
+"Field 'id' doesn't have a default value" (1364)
+or "there can be only one auto column and it must be defined as a key" (1075)
+  → Partial import left a table id without a key or AUTO_INCREMENT.
+    Run php database/tools/hostforge_repair.php once. Do not apply the
+    database/patches/fix_*_autoincrement.sql files one by one.
 
 "sms2_db.users" errors
   → Old code still deployed. Pull/redeploy latest main.

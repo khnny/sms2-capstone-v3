@@ -84,7 +84,9 @@ HostForge / single-DB cutover
      php database/migrate_to_single_prefixed.php
 6. For empty HostForge DB (fresh):
      php database/migrate.php
-7. Smoke:
+7. After deploy, repair HostForge drift once (not separate patch files):
+     php database/tools/hostforge_repair.php
+   Smoke only:
      php database/tools/smoke_single_db.php
 
 Table map: config/tables.php (sms2_* + crad_*).
