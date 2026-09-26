@@ -5,16 +5,16 @@
  */
 declare(strict_types=1);
 
+ini_set('display_errors', '0');
+if (ob_get_level() === 0) {
+    ob_start();
+}
+
 require_once __DIR__ . '/../../../config/config.php';
 require_once ROOT_PATH . '/includes/authentication.php';
 require_once ROOT_PATH . '/includes/security.php';
 require_once ROOT_PATH . '/includes/security-workflow.php';
 require_once __DIR__ . '/user-account-schema.php';
-
-ini_set('display_errors', '0');
-if (ob_get_level() === 0) {
-    ob_start();
-}
 
 /**
  * JSON body only. Drops any notice/warning text so the browser can read the payload.
@@ -32,7 +32,7 @@ function umEmit(array $payload, int $status = 200): void
         header('CDN-Cache-Control: no-store');
         header('Cloudflare-CDN-Cache-Control: no-store');
     }
-    $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     if ($json === false) {
         $json = '{"ok":false,"error":"The account could not be saved because the response could not be prepared."}';
     }
@@ -40,12 +40,87 @@ function umEmit(array $payload, int $status = 200): void
     exit;
 }
 
-register_shutdown_function(static function (): void {
+/**
+ * A post-insert error must not turn a durable account into a failed save response.
+ */
+function umCreatedAccountPayloadIfPersisted(
+    PDO $pdo,
+    bool $insertCompleted,
+    int $userId,
+    string $username,
+    string $email,
+    Throwable $cause
+): ?array {
+    if (!$insertCompleted) {
+        return null;
+    }
+
+    try {
+        $row = null;
+        if ($userId > 0) {
+            $stmt = $pdo->prepare(
+                'SELECT id, full_name, username, email, role_key AS role, status, notes
+                 FROM `sms2_users` WHERE id = ? LIMIT 1'
+            );
+            $stmt->execute([$userId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+        if (!$row && $username !== '' && $email !== '') {
+            $stmt = $pdo->prepare(
+                'SELECT id, full_name, username, email, role_key AS role, status, notes
+                 FROM `sms2_users` WHERE username = ? AND email = ? LIMIT 1'
+            );
+            $stmt->execute([$username, $email]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+    } catch (Throwable $verificationError) {
+        error_log('save-user persisted account verification failed: ' . $verificationError->getMessage());
+        return null;
+    }
+
+    if (!$row || (int) ($row['id'] ?? 0) <= 0) {
+        return null;
+    }
+
+    error_log('save-user follow-up failed after account insert: ' . $cause->getMessage());
+    $warning = $cause instanceof InvalidArgumentException
+        ? $cause->getMessage()
+        : 'Some follow-up setup could not be completed. Check the server logs.';
+    return [
+        'ok' => true,
+        'created' => true,
+        'id' => (int) $row['id'],
+        'message' => 'Account successfully created.',
+        'warning' => $warning,
+        'user' => $row,
+    ];
+}
+
+$pdo = null;
+$newUserId = 0;
+$userInsertCompleted = false;
+$username = '';
+$email = '';
+
+register_shutdown_function(static function () use (&$pdo, &$newUserId, &$userInsertCompleted, &$username, &$email): void {
     $err = error_get_last();
     if (!$err || !in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
         return;
     }
     error_log('save-user fatal: ' . ($err['message'] ?? ''));
+    if ($pdo instanceof PDO) {
+        $createdPayload = umCreatedAccountPayloadIfPersisted(
+            $pdo,
+            $userInsertCompleted,
+            $newUserId,
+            $username,
+            $email,
+            new Error('Fatal PHP error occurred after account insert.')
+        );
+        if ($createdPayload !== null) {
+            umEmit($createdPayload);
+        }
+    }
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
@@ -573,8 +648,10 @@ try {
                 $status,
                 $notes !== '' ? $notes : null,
             ]);
+            $userInsertCompleted = true;
         } else {
             $pdo->prepare($insert['sql'])->execute($insert['params']);
+            $userInsertCompleted = true;
         }
 
         $newUserId = (int) $pdo->lastInsertId();
@@ -605,7 +682,7 @@ try {
         'ok' => true,
         'created' => true,
         'id' => $newUserId,
-        'message' => 'User account created. They can sign in with the username and password you set.',
+        'message' => 'Account successfully created.',
         'user' => [
             'id' => $newUserId,
             'full_name' => $fullName,
@@ -617,11 +694,23 @@ try {
         ],
     ]);
 } catch (InvalidArgumentException $e) {
+    $createdPayload = umCreatedAccountPayloadIfPersisted($pdo, $userInsertCompleted, $newUserId, $username, $email, $e);
+    if ($createdPayload !== null) {
+        umEmit($createdPayload);
+    }
     umEmit(['ok' => false, 'error' => $e->getMessage()], 400);
 } catch (PDOException $e) {
+    $createdPayload = umCreatedAccountPayloadIfPersisted($pdo, $userInsertCompleted, $newUserId, $username, $email, $e);
+    if ($createdPayload !== null) {
+        umEmit($createdPayload);
+    }
     umEmit(['ok' => false, 'error' => umPublicDbError($e)], 400);
 } catch (Throwable $e) {
     error_log('save-user: ' . $e->getMessage());
+    $createdPayload = umCreatedAccountPayloadIfPersisted($pdo, $userInsertCompleted, $newUserId, $username, $email, $e);
+    if ($createdPayload !== null) {
+        umEmit($createdPayload);
+    }
     umEmit([
         'ok' => false,
         'error' => 'The account could not be saved. Nothing was changed. Refresh the page and try again.',

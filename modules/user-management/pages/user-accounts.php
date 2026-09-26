@@ -1171,12 +1171,15 @@ renderBreadcrumbs($breadcrumbs);
                         form.dataset.umSaved = '1';
                         closeUserModal();
                         var successText = (data && data.message) || (data.created
-                            ? 'User account created. They can sign in with the username and password you set.'
+                            ? 'Account successfully created.'
                             : (data.password_updated
                                 ? 'Password updated. The user can sign in with the new password now.'
                                 : 'User account updated.'));
-                        showPageAlert(successText, 'success');
-                        if (typeof umShowToast === 'function') umShowToast(successText, 'success');
+                        var followupWarning = data && data.warning ? String(data.warning) : '';
+                        var alertText = successText + (followupWarning ? ' ' + followupWarning : '');
+                        var alertType = followupWarning ? 'warning' : 'success';
+                        showPageAlert(alertText, alertType);
+                        if (typeof umShowToast === 'function') umShowToast(alertText, alertType);
                         form.dataset.pwDirty = '0';
                         if (pwInput) pwInput.value = '';
                         if (pwConfirmInput) pwConfirmInput.value = '';
