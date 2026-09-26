@@ -629,7 +629,7 @@ renderBreadcrumbs($breadcrumbs);
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Username <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" name="username" placeholder="e.g. mariasantos" maxlength="80" required autocomplete="off">
-                            <div class="form-text" id="umUsernameHelp">Use letters only (A–Z); numbers are not required.</div>
+                            <div class="form-text" id="umUsernameHelp">Use letters and numbers only (A–Z, 0–9).</div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
@@ -1120,8 +1120,8 @@ renderBreadcrumbs($breadcrumbs);
                     showSaveError('Enter ' + missing.join(', ') + '.');
                     return;
                 }
-                if (!userId && !/^[a-z]+$/i.test(username)) {
-                    showSaveError('Username can contain letters only (A-Z).');
+                if (!userId && !/^[a-z0-9]+$/i.test(username)) {
+                    showSaveError('Username can contain letters and numbers only (A-Z, 0-9).');
                     form.querySelector('[name="username"]').focus();
                     return;
                 }
