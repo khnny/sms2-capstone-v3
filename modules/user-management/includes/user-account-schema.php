@@ -7,7 +7,9 @@
  * form value "crad" is normalized to that key before the foreign key check).
  * A partial import can still leave id as a plain integer. Insert then fails
  * with 1364, which the old mapper did not recognize, so Add User showed only
- * the generic "database rejected it" fallback. Student saves can hit the same
+ * the generic "database rejected it" fallback. The create path restores
+ * AUTO_INCREMENT when ALTER is allowed; otherwise the message names
+ * database/patches/fix_users_autoincrement.sql. Student saves can hit the same
  * fallback when profile DDL implicitly commits and the later commit() finds
  * no transaction.
  */
@@ -276,7 +278,7 @@ function umUserInsertStatement(array $columns, array $fields): array
         $extra = strtolower((string) ($columns['id']['Extra'] ?? ''));
         if (!str_contains($extra, 'auto_increment') && !umColumnHasDefault($columns['id']) && !umColumnIsNullable($columns['id'])) {
             throw new InvalidArgumentException(
-                'The users table id column is not AUTO_INCREMENT, so a new account cannot be saved. Nothing was changed. Run: ALTER TABLE `sms2_users` MODIFY `id` INT UNSIGNED NOT NULL AUTO_INCREMENT;'
+                'The users table id column is missing AUTO_INCREMENT, so a new account cannot be saved. Nothing was changed. Run database/patches/fix_users_autoincrement.sql.'
             );
         }
     }
@@ -457,12 +459,11 @@ function umMapPublicDbError(PDOException $e): string
         return 'The users table is missing the column ' . $named . ', so the account was not saved.';
     }
     if ($is(1364, 'HY000', "doesn't have a default value") && ($errno === 1364 || str_contains(strtolower($full), "doesn't have a default value") || preg_match('/\b1364\b/', $full) === 1)) {
-        $named = $column !== '' ? $column : 'a required column';
-        $text = 'The users table column ' . $named . ' has no default value, so the account was not saved.';
-        if ($column === 'id') {
-            $text .= ' The id column needs to be AUTO_INCREMENT.';
+        if ($column === 'id' || str_ends_with($column, '.id')) {
+            return 'The users table id column is missing AUTO_INCREMENT, so the account was not saved. Run database/patches/fix_users_autoincrement.sql.';
         }
-        return $text;
+        $named = $column !== '' ? $column : 'a required column';
+        return 'The users table column ' . $named . ' has no default value, so the account was not saved.';
     }
     if ($is(1048, '23000', 'cannot be null') && ($errno === 1048 || str_contains(strtolower($full), 'cannot be null') || preg_match('/\b1048\b/', $full) === 1)) {
         $named = $column !== '' ? $column : 'a required field';
