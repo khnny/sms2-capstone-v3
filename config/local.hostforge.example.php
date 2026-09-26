@@ -6,6 +6,7 @@
  * Prefer setting these in the HostForge panel (no password in files):
  *   DB_CONNECTION, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
  *   SMS2_DEPLOY_TOKEN  (optional; for /setup/deploy-db.php)
+ *   SMS2_APP_KEY (required to preserve existing encrypted DB secrets)
  *   SMS2_SMTP_PASSWORD / SMS2_SMTP_USERNAME  (Gmail App Password — survives redeploys)
  *   SMS2_TURNSTILE_SITE_KEY / SMS2_TURNSTILE_SECRET_KEY (recommended for live CAPTCHA)
  *
@@ -17,6 +18,9 @@
 
 // Optional: token for setup/deploy-db.php web migrate
 // define('SMS2_DEPLOY_TOKEN', 'YOUR_DEPLOY_TOKEN');
+// Set SMS2_APP_KEY in HostForge Environment Variables to the exact existing
+// key from the old container, persistent key storage, or secure backup.
+// Do not generate a new value: it will not decrypt existing sms2enc1 secrets.
 // define('SMS2_TURNSTILE_SITE_KEY', 'YOUR_TURNSTILE_SITE_KEY');
 // define('SMS2_TURNSTILE_SECRET_KEY', 'YOUR_TURNSTILE_SECRET_KEY');
 
