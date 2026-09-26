@@ -9,11 +9,7 @@
  */
 declare(strict_types=1);
 
-/**
- * Minimum research group members (leader counts).
- * No existing policy constant found in title-form / send-to-adviser;
- * title form documents a maximum of 6 members only.
- */
+/** Minimum research group members (leader counts). */
 function cradRgFlowMinMembers(): int
 {
     return 5;
@@ -21,7 +17,7 @@ function cradRgFlowMinMembers(): int
 
 function cradRgFlowMaxMembers(): int
 {
-    return 6;
+    return 5;
 }
 
 /** Shared pending statuses awaiting Department Head Approve/Reject (legacy alias included). */
@@ -604,7 +600,7 @@ function cradRgFlowSaveSubmission(
     $min = cradRgFlowMinMembers();
     $max = cradRgFlowMaxMembers();
     if ($count > $max) {
-        return ['ok' => false, 'message' => 'Maximum ' . $max . ' members allowed.'];
+        return ['ok' => false, 'message' => 'This research group has reached the maximum of 5 student members.'];
     }
 
     $isComplete = $count >= $min ? 1 : 0;
@@ -628,6 +624,12 @@ function cradRgFlowSaveSubmission(
 
     $pdo->beginTransaction();
     try {
+        $groupLock = $pdo->prepare('SELECT id FROM `crad_research_groups` WHERE id = ? FOR UPDATE');
+        $groupLock->execute([$groupId]);
+        if (!$groupLock->fetchColumn()) {
+            throw new RuntimeException('Research group no longer exists.');
+        }
+
         $pdo->prepare('DELETE FROM `crad_research_group_members` WHERE research_group_id = ?')->execute([$groupId]);
         $ins = $pdo->prepare(
             "INSERT INTO `crad_research_group_members`
@@ -1446,7 +1448,12 @@ function cradRgFlowSyncAfterTitleApproved(PDO $pdo, int $titleApprovalId, int $o
         if ($early && (int) $early['id'] !== $officialGroupId) {
             $existing = cradRgFlowGetMembers($pdo, $officialGroupId);
             if ($existing === []) {
-                foreach (cradRgFlowGetMembers($pdo, (int) $early['id']) as $i => $m) {
+                $earlyMembers = array_slice(
+                    cradRgFlowGetMembers($pdo, (int) $early['id']),
+                    0,
+                    cradRgFlowMaxMembers()
+                );
+                foreach ($earlyMembers as $i => $m) {
                     $pdo->prepare(
                         "INSERT INTO `crad_research_group_members`
                             (research_group_id, member_order, student_id, full_name, section, email, or_number, is_leader)

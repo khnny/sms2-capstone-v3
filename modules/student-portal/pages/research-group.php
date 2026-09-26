@@ -187,6 +187,9 @@ renderBreadcrumbs($breadcrumbs);
 
           <?php if ($canEdit): ?>
             <button type="button" class="btn btn-outline-primary mb-3" id="rgAddMember">+ Add Member</button>
+            <div class="alert alert-warning py-2 mb-3" id="rgMaxMembersNotice" role="status" hidden>
+              This research group has reached the maximum of 5 student members.
+            </div>
           <?php endif; ?>
 
           <div class="mb-3" id="rgReasonWrap">
@@ -211,9 +214,17 @@ renderBreadcrumbs($breadcrumbs);
   const addBtn = document.getElementById('rgAddMember');
   const maxMembers = <?= (int) $maxMembers ?>;
   if (!list || !addBtn) return;
+  const maxNotice = document.getElementById('rgMaxMembersNotice');
+  function updateAddButton() {
+    const atLimit = list.querySelectorAll('.rg-member-card').length >= maxMembers;
+    addBtn.disabled = atLimit;
+    addBtn.setAttribute('aria-disabled', atLimit ? 'true' : 'false');
+    if (maxNotice) maxNotice.hidden = !atLimit;
+  }
+  updateAddButton();
   addBtn.addEventListener('click', function () {
     if (list.querySelectorAll('.rg-member-card').length >= maxMembers) {
-      alert('Maximum ' + maxMembers + ' members.');
+      updateAddButton();
       return;
     }
     const card = document.createElement('div');
@@ -225,12 +236,16 @@ renderBreadcrumbs($breadcrumbs);
       + '<div class="col-md-4"><label class="form-label">Section</label><input class="form-control" name="member_section[]"></div>'
       + '</div>';
     list.appendChild(card);
+    updateAddButton();
   });
   list.addEventListener('click', function (e) {
     const btn = e.target.closest('.rg-remove');
     if (!btn) return;
     const card = btn.closest('.rg-member-card');
-    if (card && list.querySelectorAll('.rg-member-card').length > 1) card.remove();
+    if (card && list.querySelectorAll('.rg-member-card').length > 1) {
+      card.remove();
+      updateAddButton();
+    }
   });
 })();
 </script>
