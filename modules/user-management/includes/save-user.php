@@ -262,6 +262,7 @@ function rcSyncAssignmentFromUserAccount(int $userId, string $role, string $full
     try {
         if ($role === 'adviser') {
             rcEnsureAdviserUserColumn($crad);
+            umEnsureTableIdAutoIncrement($crad, 'crad_research_adviser_assignments');
 
             $stmt = $crad->prepare(
                 "SELECT id, adviser_user_id, research_group_id, proposal_id, group_number
@@ -311,6 +312,7 @@ function rcSyncAssignmentFromUserAccount(int $userId, string $role, string $full
         }
 
         rcEnsureCoordinatorGroupNullable($crad);
+        umEnsureTableIdAutoIncrement($crad, 'crad_research_coordinator_assignments');
 
         $stmt = $crad->prepare(
             "SELECT id, group_number FROM `crad_research_coordinator_assignments`
@@ -345,12 +347,14 @@ function rcSyncAssignmentFromUserAccount(int $userId, string $role, string $full
         throw $e;
     } catch (Throwable $e) {
         error_log('Assignment sync failed: ' . $e->getMessage());
+        $detail = function_exists('umRedactDbMessage') ? umRedactDbMessage($e->getMessage()) : '';
+        $suffix = $detail !== '' ? ' Database detail: ' . $detail : '';
         if ($e instanceof PDOException && (str_contains($e->getMessage(), 'Duplicate') || str_contains($e->getMessage(), '1062'))) {
-            $fail('An assignment with this name or email already exists.');
+            $fail('An assignment with this name or email already exists.' . $suffix);
         }
-        $fail($accountCommitted
+        $fail(($accountCommitted
             ? 'Refresh the page to see the saved account.'
-            : 'Its assignment record could not be saved, so nothing was changed.');
+            : 'Its assignment record could not be saved, so nothing was changed.') . $suffix);
     }
 }
 
@@ -575,16 +579,25 @@ try {
 
         $newUserId = (int) $pdo->lastInsertId();
         rcSyncAssignmentFromUserAccount($newUserId, $role, $fullName, $email, $status);
-        if ($role === 'student') {
-            require_once ROOT_PATH . '/modules/student-portal/includes/student-profile.php';
-            studentPortalEnsureProfileForUser($newUserId, (string) ($studentId ?? ''), $role);
+        // Profile setup runs CREATE TABLE, which implicitly commits. Keep it
+        // outside this transaction so commit() is not called with none active.
+        if ($pdo->inTransaction()) {
+            $pdo->commit();
         }
-        $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
-            $pdo->rollBack();
+            try {
+                $pdo->rollBack();
+            } catch (Throwable $rollbackError) {
+                error_log('save-user rollback failed: ' . $rollbackError->getMessage());
+            }
         }
         throw $e;
+    }
+
+    if ($role === 'student') {
+        require_once ROOT_PATH . '/modules/student-portal/includes/student-profile.php';
+        studentPortalEnsureProfileForUser($newUserId, (string) ($studentId ?? ''), $role);
     }
 
     logActivity('create', 'Created user ' . $username, 'user-management');

@@ -2,12 +2,14 @@
 /**
  * HostForge-safe sms2_users writes for Add / Edit User.
  *
- * database/sms2_db.sql defines password_changed_at, notes, and student_id, and
- * turns id into AUTO_INCREMENT in a later ALTER. A partial HostForge import can
- * leave those behind. The User Accounts list does not read password_changed_at
- * or student_id, so the page still opens while INSERT fails. Unknown-column
- * (1054) and missing-default (1364) messages were not mapped, so the UI showed
- * only the generic "database rejected it" fallback.
+ * Live hf_db_162pzmvl has every sms2_users column this insert uses, including
+ * password_changed_at and notes, and its role rows include crad_officer (the
+ * form value "crad" is normalized to that key before the foreign key check).
+ * A partial import can still leave id as a plain integer. Insert then fails
+ * with 1364, which the old mapper did not recognize, so Add User showed only
+ * the generic "database rejected it" fallback. Student saves can hit the same
+ * fallback when profile DDL implicitly commits and the later commit() finds
+ * no transaction.
  */
 declare(strict_types=1);
 
@@ -124,25 +126,8 @@ function umRepairSms2UsersForAccountWrite(PDO $pdo, array $columns): array
     if (isset($columns['id'])) {
         $extra = strtolower((string) ($columns['id']['Extra'] ?? ''));
         if (!str_contains($extra, 'auto_increment')) {
-            try {
-                $keyStmt = $pdo->query("SHOW KEYS FROM `sms2_users` WHERE Key_name = 'PRIMARY'");
-                $hasPk = $keyStmt && (bool) $keyStmt->fetch(PDO::FETCH_ASSOC);
-                if (!$hasPk) {
-                    $pdo->exec('ALTER TABLE `sms2_users` ADD PRIMARY KEY (`id`)');
-                }
-                $type = (string) ($columns['id']['Type'] ?? 'int(10) unsigned');
-                if (preg_match('/^[a-z0-9(), ]+$/i', $type) !== 1) {
-                    $type = 'int(10) unsigned';
-                }
-                $nullable = umColumnIsNullable($columns['id']) ? 'NULL' : 'NOT NULL';
-                $pdo->exec(
-                    'ALTER TABLE `sms2_users` MODIFY `id` ' . $type . ' ' . $nullable . ' AUTO_INCREMENT'
-                );
-                $changed = true;
-                error_log('save-user schema repair set sms2_users.id AUTO_INCREMENT');
-            } catch (Throwable $e) {
-                error_log('save-user schema repair could not set sms2_users.id AUTO_INCREMENT: ' . $e->getMessage());
-            }
+            umEnsureTableIdAutoIncrement($pdo, 'sms2_users');
+            $changed = true;
         }
     }
 
@@ -152,6 +137,48 @@ function umRepairSms2UsersForAccountWrite(PDO $pdo, array $columns): array
     $fresh = umSms2UsersColumns($pdo);
 
     return $fresh ?? $columns;
+}
+
+/**
+ * HostForge dumps often keep the id column and drop AUTO_INCREMENT.
+ * Insert then fails with 1364 even though every other column exists.
+ */
+function umEnsureTableIdAutoIncrement(PDO $pdo, string $table): void
+{
+    $allowed = [
+        'sms2_users' => true,
+        'crad_research_adviser_assignments' => true,
+        'crad_research_coordinator_assignments' => true,
+    ];
+    if (!isset($allowed[$table])) {
+        return;
+    }
+
+    try {
+        $stmt = $pdo->query('SHOW COLUMNS FROM `' . $table . "` LIKE 'id'");
+        $col = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+        if (!is_array($col)) {
+            return;
+        }
+        $extra = strtolower((string) ($col['Extra'] ?? ''));
+        if (str_contains($extra, 'auto_increment')) {
+            return;
+        }
+        $keyStmt = $pdo->query('SHOW KEYS FROM `' . $table . "` WHERE Key_name = 'PRIMARY'");
+        $hasPk = $keyStmt && (bool) $keyStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$hasPk) {
+            $pdo->exec('ALTER TABLE `' . $table . '` ADD PRIMARY KEY (`id`)');
+        }
+        $type = (string) ($col['Type'] ?? 'int(10) unsigned');
+        if (preg_match('/^[a-z0-9(), ]+$/i', $type) !== 1) {
+            $type = 'int(10) unsigned';
+        }
+        $nullable = strtoupper((string) ($col['Null'] ?? 'NO')) === 'YES' ? 'NULL' : 'NOT NULL';
+        $pdo->exec('ALTER TABLE `' . $table . '` MODIFY `id` ' . $type . ' ' . $nullable . ' AUTO_INCREMENT');
+        error_log('save-user schema repair set ' . $table . '.id AUTO_INCREMENT');
+    } catch (Throwable $e) {
+        error_log('save-user schema repair could not set ' . $table . '.id AUTO_INCREMENT: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -374,6 +401,28 @@ function umViewerIsSuperAdmin(): bool
 
 function umPublicDbError(PDOException $e): string
 {
+    $message = umMapPublicDbError($e);
+    if (!umViewerIsSuperAdmin()) {
+        return $message;
+    }
+
+    $info = is_array($e->errorInfo ?? null) ? $e->errorInfo : [];
+    $sqlstate = (string) ($info[0] ?? '');
+    $errno = isset($info[1]) && is_numeric($info[1]) ? (string) (int) $info[1] : '';
+    $driverMessage = (string) ($info[2] ?? '');
+    if ($driverMessage === '') {
+        $driverMessage = $e->getMessage();
+    }
+    $detail = umRedactDbMessage(trim($sqlstate . ' ' . $errno . ' ' . $driverMessage));
+    if ($detail === '' || str_contains($message, $detail)) {
+        return $message;
+    }
+
+    return $message . ' Database detail: ' . $detail;
+}
+
+function umMapPublicDbError(PDOException $e): string
+{
     $info = is_array($e->errorInfo ?? null) ? $e->errorInfo : [];
     $sqlstate = (string) ($info[0] ?? '');
     $errno = isset($info[1]) && is_numeric($info[1]) ? (int) $info[1] : 0;
@@ -446,15 +495,11 @@ function umPublicDbError(PDOException $e): string
         $named = $column !== '' ? $column : 'a date field';
         return 'The database rejected the date value for ' . $named . ', so the account was not saved.';
     }
-
-    error_log('save-user PDO unmapped sqlstate=' . $sqlstate . ' errno=' . $errno);
-    $fallback = 'The account could not be saved because the database rejected it. Nothing was changed.';
-    if (umViewerIsSuperAdmin()) {
-        $detail = umRedactDbMessage(trim($sqlstate . ' ' . $errno . ' ' . $msg));
-        if ($detail !== '') {
-            $fallback .= ' Database detail: ' . $detail;
-        }
+    if (str_contains(strtolower($full), 'no active transaction')) {
+        return 'The save transaction was already closed, so the account may already exist. Refresh User Accounts before trying again.';
     }
 
-    return $fallback;
+    error_log('save-user PDO unmapped sqlstate=' . $sqlstate . ' errno=' . $errno);
+
+    return 'The account could not be saved because the database rejected it. Nothing was changed.';
 }
