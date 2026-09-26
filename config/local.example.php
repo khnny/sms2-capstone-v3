@@ -19,8 +19,11 @@
 // define('SMS2_SMTP_USERNAME', 'your.account@gmail.com');
 // define('SMS2_SMTP_PASSWORD', 'xxxx xxxx xxxx xxxx');
 
-// Optional: Fixed 32-byte or base64 encryption key for secrets (AES-256).
-// Keeps encrypted secrets (Turnstile keys, SMTP passwords) persistent across redeployments.
+// Optional local equivalent of the HostForge SMS2_APP_KEY environment secret.
+// Preserve the exact existing key to decrypt saved secrets; never generate a
+// replacement when encrypted database values already exist.
+// HostForge Docker deployments should set SMS2_APP_KEY in platform secrets
+// because storage/keys/app.key is excluded from the Docker build context.
 // define('SMS2_APP_KEY', '');
 
 define('SMS2_LOCAL_BASE_URL', '/sms2_system');

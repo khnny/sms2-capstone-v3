@@ -37,10 +37,46 @@ In HostForge → Environment Variables, set:
 Optional (recommended for web migrate):
   SMS2_DEPLOY_TOKEN=<long random secret you invent>
 
-Optional SMTP (Gmail App Password — recommended on HostForge so email
-survives redeploys even if storage/keys/app.key is regenerated):
+Encryption key (REQUIRED to preserve existing encrypted SMS2 secrets):
+  SMS2_APP_KEY=<the exact existing application key, stored as a HostForge secret>
+
+The application reads its key in this order: a non-empty SMS2_APP_KEY constant
+in config/local.php; the SMS2_APP_KEY environment variable (then APP_KEY as a
+compatibility fallback); storage/keys/app.key; finally, it generates a new key.
+Set SMS2_APP_KEY explicitly in HostForge to the existing key. The Docker build
+intentionally excludes storage/keys/* and creates an empty runtime directory,
+so a key generated inside an ephemeral container is not a persistent key.
+When that key changes, AES-256-GCM cannot authenticate/decrypt existing
+sms2enc1 values (including encrypted TOTP, SMTP, and CAPTCHA secrets).
+
+Recover the original key only from the still-running container that encrypted
+the data, its persistent storage/volume, or a secure backup/secret manager.
+The generated app.key file contains the base64 representation of the 32-byte
+key and can be used as the SMS2_APP_KEY value. If the original key was supplied
+through configuration instead, preserve that exact original value. Do not
+generate a replacement, save the key in Git/SQL, or paste it into tickets/chat.
+After setting the value as a protected HostForge environment secret, restart or
+redeploy and leave that variable unchanged. Do not define a conflicting
+SMS2_APP_KEY constant in config/local.php because constants take precedence
+over environment variables.
+
+If the previous container, persistent key file, and secure backups are all
+gone, the key cannot be recovered from sms2enc1 ciphertext or from the
+database. Stop before changing encrypted values; retain the current database
+and escalate to the operator who may hold the old container or key backup.
+
+After configuring the key, verify a normal password login and, for an account
+with authenticator-based 2FA enabled, complete the existing TOTP login. Also
+test existing encrypted SMTP/CAPTCHA settings where configured. Repeat the
+checks after a container restart to verify the HostForge secret remains set.
+
+Optional SMTP (Gmail App Password):
   SMS2_SMTP_USERNAME=your.account@gmail.com
   SMS2_SMTP_PASSWORD=xxxxxxxxxxxxxxxx
+
+The SMTP environment variables override the stored SMTP configuration; they
+do not restore the encryption key and do not make existing TOTP or CAPTCHA
+ciphertexts decryptable.
 
 Optional live CAPTCHA (recommended):
   SMS2_TURNSTILE_SITE_KEY=<Cloudflare Turnstile site key>
@@ -186,8 +222,11 @@ Cannot connect from your PC to mariadb-*.internal
   → Expected. Use HostForge terminal / phpMyAdmin, not local XAMPP.
 
 "SMTP password is missing or could not be decrypted"
-  → Encrypted DB secret lost after app.key rotated, or never saved on HostForge.
-    Fastest fix: set HostForge env SMS2_SMTP_PASSWORD to your Gmail App Password
-    (no spaces needed), redeploy/restart app, then Test email in System Settings.
-    Also set smtp_host=smtp.gmail.com, port 587, TLS, and smtp_username in
-    System Settings if those are empty.
+  → The configured application key differs from the key used to encrypt the DB
+    secret, or SMTP was never configured. Restore the original SMS2_APP_KEY
+    from the old container/persistent key/secure backup first if other stored
+    encrypted secrets must keep working. For SMTP-only recovery, set HostForge
+    env SMS2_SMTP_PASSWORD to the Gmail App Password (no spaces needed), then
+    Test email in System Settings. This does not repair encrypted TOTP/CAPTCHA
+    secrets. Also set smtp_host=smtp.gmail.com, port 587, TLS, and smtp_username
+    in System Settings if those are empty.
