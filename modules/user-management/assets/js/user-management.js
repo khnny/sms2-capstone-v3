@@ -621,25 +621,53 @@
     window.umShowToast = function (message, type) {
         type = type || 'success';
         var container = document.getElementById('umToastContainer');
-        if (!container) return;
-
-        var id = 'toast-' + Date.now();
-        var icons = { success: 'fa-check-circle', danger: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
-        var icon  = icons[type] || icons.info;
-
-        var html = '<div id="' + id + '" class="toast align-items-center text-bg-' + type + ' border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">'
-            + '<div class="d-flex"><div class="toast-body d-flex align-items-center gap-2">'
-            + (window.smsIconHtml ? window.smsIconHtml(icon.replace(/^fa-/, '')) : '') + ' ' + message
-            + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>'
-            + '</div></div>';
-
-        container.insertAdjacentHTML('beforeend', html);
-        var el = document.getElementById(id);
-        if (el && window.bootstrap) {
-            var t = new bootstrap.Toast(el, { delay: 3500 });
-            t.show();
-            el.addEventListener('hidden.bs.toast', function () { el.remove(); });
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'umToastContainer';
+            container.className = 'position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(container);
+        } else if (container.parentNode !== document.body) {
+            document.body.appendChild(container);
         }
+        container.style.zIndex = '2000';
+
+        var icons = { success: 'fa-check-circle', danger: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+        var icon = icons[type] || icons.info;
+        var el = document.createElement('div');
+        el.className = 'toast align-items-center text-bg-' + type + ' border-0 mb-2';
+        el.setAttribute('role', 'alert');
+        el.setAttribute('aria-live', 'assertive');
+        el.setAttribute('aria-atomic', 'true');
+
+        var flex = document.createElement('div');
+        flex.className = 'd-flex';
+        var body = document.createElement('div');
+        body.className = 'toast-body d-flex align-items-center gap-2';
+        try {
+            if (window.smsIconHtml) {
+                body.insertAdjacentHTML('afterbegin', window.smsIconHtml(icon.replace(/^fa-/, '')));
+            }
+        } catch (err) { /* icon is optional */ }
+        body.appendChild(document.createTextNode(String(message == null ? '' : message)));
+        var close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'btn-close btn-close-white me-2 m-auto';
+        close.setAttribute('data-bs-dismiss', 'toast');
+        close.setAttribute('aria-label', 'Close');
+        flex.appendChild(body);
+        flex.appendChild(close);
+        el.appendChild(flex);
+        container.appendChild(el);
+
+        if (window.bootstrap && window.bootstrap.Toast) {
+            try {
+                var t = new bootstrap.Toast(el, { delay: type === 'danger' || type === 'warning' ? 8000 : 5000 });
+                t.show();
+                el.addEventListener('hidden.bs.toast', function () { el.remove(); });
+                return;
+            } catch (err) { /* fall through to a visible toast */ }
+        }
+        el.classList.add('show');
     };
 
     /* ── Boot ───────────────────────────────────────────────── */
@@ -653,7 +681,7 @@
         // Show toast from URL param (after form submit redirect)
         var params = new URLSearchParams(window.location.search);
         if (params.get('saved') === '1')   window.umShowToast('Changes saved successfully.', 'success');
-        if (params.get('created') === '1') window.umShowToast('User account created.', 'success');
+        if (params.get('created') === '1') window.umShowToast('User account created. They can sign in with the username and password you set.', 'success');
         if (params.get('updated') === '1') window.umShowToast('User account updated.', 'success');
         if (params.get('password') === '1') window.umShowToast('Password updated. The user can sign in with the new password now.', 'success');
         if (params.get('archived') === '1') window.umShowToast('Moved to User Archive.', 'warning');

@@ -10,18 +10,61 @@ require_once ROOT_PATH . '/includes/authentication.php';
 require_once ROOT_PATH . '/includes/security.php';
 require_once ROOT_PATH . '/includes/security-workflow.php';
 
-header('Content-Type: application/json');
+ini_set('display_errors', '0');
+if (ob_get_level() === 0) {
+    ob_start();
+}
 
-if (!isAuthenticated() || !userCanAccessModule('user-management')) {
-    http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'Forbidden']);
+/**
+ * JSON body only. Drops any notice/warning text so the browser can read the payload.
+ */
+function umEmit(array $payload, int $status = 200): void
+{
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (!headers_sent()) {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('CDN-Cache-Control: no-store');
+        header('Cloudflare-CDN-Cache-Control: no-store');
+    }
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+    if ($json === false) {
+        $json = '{"ok":false,"error":"The account could not be saved because the response could not be prepared."}';
+    }
+    echo $json;
     exit;
 }
 
+register_shutdown_function(static function (): void {
+    $err = error_get_last();
+    if (!$err || !in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        return;
+    }
+    error_log('save-user fatal: ' . ($err['message'] ?? ''));
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');
+    }
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Add User stopped because of a server error. Nothing was saved. Refresh the page and try again.',
+    ]);
+});
+
+if (!isAuthenticated() || !userCanAccessModule('user-management')) {
+    umEmit(['ok' => false, 'error' => 'You do not have permission to add or update users.'], 403);
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['ok' => false, 'error' => 'Method not allowed']);
-    exit;
+    umEmit(['ok' => false, 'error' => 'Add User only accepts a submitted form. Refresh the page and try again.'], 405);
 }
 
 $raw = file_get_contents('php://input');
@@ -31,13 +74,14 @@ if (!is_array($data)) {
     $data = $_POST;
 }
 
+if (ob_get_level() > 0) {
+    ob_clean();
+}
 requireCsrf(isset($data['csrf_token']) ? (string) $data['csrf_token'] : null);
 
 $pdo = db();
 if (!$pdo) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Database unavailable']);
-    exit;
+    umEmit(['ok' => false, 'error' => 'The database is unavailable, so the account was not saved.'], 500);
 }
 
 $action = (string) ($data['action'] ?? 'save');
@@ -80,8 +124,108 @@ function umApplyUserPassword(int $userId, string $password): void
         throw new InvalidArgumentException($strength['message']);
     }
     if (!smsSetUserPassword($userId, $password, false)) {
-        throw new RuntimeException('Could not update password');
+        throw new InvalidArgumentException('The password could not be saved. Try a different password.');
     }
+}
+
+/**
+ * @return array<string, string>
+ */
+function umRoleLabels(): array
+{
+    return [
+        'superadmin' => 'Super Admin',
+        'sms_admin' => 'Admin',
+        'admission' => 'Admission',
+        'registrar' => 'Registrar',
+        'finance' => 'Finance',
+        'hr' => 'Dean',
+        'adviser' => 'Adviser',
+        'research_director' => 'Research Director',
+        'grammarian' => 'Grammarian',
+        'panel' => 'Panel Member',
+        'it_office' => 'IT Office',
+        'osa' => 'OSA',
+        'qa' => 'QA Office',
+        'crad_officer' => 'CRAD Officer',
+        'research_coordinator' => 'Research Coordinator',
+        'department_head' => 'Department Head',
+        'department_chair' => 'Department Chair',
+        'research_office' => 'Research Office',
+        'vpaa' => 'VPAA',
+        'review_committee' => 'Review Committee',
+        'student' => 'Student',
+    ];
+}
+
+/**
+ * sms2_users.role_key is a foreign key. Seed the selected role so a
+ * legitimate Add User is not rejected when that role row is missing.
+ */
+function umEnsureRoleRow(PDO $pdo, string $role): void
+{
+    try {
+        $check = $pdo->prepare('SELECT role_key FROM `sms2_roles` WHERE role_key = ? LIMIT 1');
+        $check->execute([$role]);
+        if ($check->fetch()) {
+            return;
+        }
+        $labels = umRoleLabels();
+        $label = $labels[$role] ?? $role;
+        $pdo->prepare(
+            'INSERT IGNORE INTO `sms2_roles` (role_key, label, description, is_system) VALUES (?, ?, ?, 1)'
+        )->execute([$role, $label, $label]);
+    } catch (Throwable $e) {
+        // A missing role row still fails the user insert with a clear message.
+        error_log('save-user role ensure skipped: ' . $e->getMessage());
+    }
+}
+
+function umAssertUniqueAccount(PDO $pdo, string $username, string $email, int $ignoreId): void
+{
+    $byName = $pdo->prepare('SELECT id FROM `sms2_users` WHERE LOWER(username) = ? AND id <> ? LIMIT 1');
+    $byName->execute([$username, $ignoreId]);
+    if ($byName->fetch()) {
+        throw new InvalidArgumentException('That username is already in use. Choose a different username.');
+    }
+
+    $byEmail = $pdo->prepare('SELECT id FROM `sms2_users` WHERE LOWER(email) = ? AND id <> ? LIMIT 1');
+    $byEmail->execute([$email, $ignoreId]);
+    if ($byEmail->fetch()) {
+        throw new InvalidArgumentException('That email address is already in use. Choose a different email.');
+    }
+}
+
+function umPublicDbError(PDOException $e): string
+{
+    error_log('save-user PDO: ' . $e->getMessage());
+    $msg = $e->getMessage();
+    if (str_contains($msg, '1452') || str_contains(strtolower($msg), 'foreign key')) {
+        return 'That role is not available in the database yet. Refresh User Accounts and try again.';
+    }
+    if (str_contains($msg, '1406') || str_contains($msg, 'Data too long')) {
+        return 'One of the fields is too long. Shorten the name, username, email, or notes and try again.';
+    }
+    if (str_contains($msg, 'uq_users_username') || str_contains($msg, "for key 'username'")) {
+        return 'That username is already in use. Choose a different username.';
+    }
+    if (str_contains($msg, 'uq_users_email') || str_contains($msg, "for key 'email'")) {
+        return 'That email address is already in use. Choose a different email.';
+    }
+    if (str_contains($msg, 'uniq_raa_adviser_identity')) {
+        return 'An adviser assignment with this name and email already exists, so the account was not created.';
+    }
+    if (str_contains($msg, 'uniq_rca_')) {
+        return 'A research coordinator assignment already exists for this account, so the user was not created.';
+    }
+    if (str_contains($msg, 'Duplicate') || str_contains($msg, '1062')) {
+        return 'That username or email is already in use.';
+    }
+    if (str_contains($msg, '1265') || str_contains($msg, '1264')) {
+        return 'The status or role is not valid for a user account.';
+    }
+
+    return 'The account could not be saved because the database rejected it. Nothing was changed.';
 }
 
 /**
@@ -123,14 +267,27 @@ function rcEnsureCoordinatorGroupNullable(PDO $crad): void
  * table (idempotent; never overwrites an existing group assignment). Uses the
  * new/existing users.id as the reference where the schema has a user column.
  */
-function rcSyncAssignmentFromUserAccount(int $userId, string $role, string $fullName, string $email, string $status): void
+function rcSyncAssignmentFromUserAccount(int $userId, string $role, string $fullName, string $email, string $status, bool $accountCommitted = false): void
 {
     if ($userId <= 0 || !in_array($role, ['adviser', 'research_coordinator'], true)) {
         return;
     }
 
-    require_once ROOT_PATH . '/modules/crad/config/config.php';
-    $crad = getCradDatabaseConnection();
+    $who = $role === 'adviser' ? 'adviser' : 'research coordinator';
+    $fail = static function (string $reason) use ($accountCommitted, $who): void {
+        if ($accountCommitted) {
+            throw new InvalidArgumentException('The user account was saved, but the ' . $who . ' assignment could not be updated. ' . $reason);
+        }
+        throw new InvalidArgumentException('The ' . $who . ' account was not created. ' . $reason);
+    };
+
+    try {
+        require_once ROOT_PATH . '/modules/crad/config/config.php';
+        $crad = getCradDatabaseConnection();
+    } catch (Throwable $e) {
+        error_log('Assignment sync connection failed: ' . $e->getMessage());
+        $fail('The research assignment database is unavailable. Try again when it is reachable.');
+    }
 
     try {
         if ($role === 'adviser') {
@@ -214,8 +371,16 @@ function rcSyncAssignmentFromUserAccount(int $userId, string $role, string $full
             strtolower($status) === 'active' ? 'Active' : 'Inactive',
             (int) ($_SESSION['user_id'] ?? 0) ?: null,
         ]);
+    } catch (InvalidArgumentException $e) {
+        throw $e;
     } catch (Throwable $e) {
-        throw new RuntimeException('Assignment record could not be created: ' . $e->getMessage(), 0, $e);
+        error_log('Assignment sync failed: ' . $e->getMessage());
+        if ($e instanceof PDOException && (str_contains($e->getMessage(), 'Duplicate') || str_contains($e->getMessage(), '1062'))) {
+            $fail('An assignment with this name or email already exists.');
+        }
+        $fail($accountCommitted
+            ? 'Refresh the page to see the saved account.'
+            : 'Its assignment record could not be saved, so nothing was changed.');
     }
 }
 
@@ -241,8 +406,7 @@ try {
         }
         $label = $status === 'active' ? 'Restored' : 'Archived';
         logActivity('update', $label . ' user #' . $id . ' (status=' . $status . ')', 'user-management');
-        echo json_encode(['ok' => true, 'status' => $status]);
-        exit;
+        umEmit(['ok' => true, 'status' => $status]);
     }
 
     if ($action === 'delete') {
@@ -266,8 +430,7 @@ try {
         }
         $pdo->prepare('DELETE FROM `sms2_users` WHERE id = ?')->execute([$id]);
         logActivity('delete', 'Permanently deleted archived user #' . $id, 'user-management');
-        echo json_encode(['ok' => true]);
-        exit;
+        umEmit(['ok' => true]);
     }
 
     if ($action === 'reset_password') {
@@ -281,11 +444,10 @@ try {
             throw new InvalidArgumentException($strength['message']);
         }
         if (!smsSetUserPassword($id, $temp, true)) {
-            throw new RuntimeException('Reset failed');
+            throw new InvalidArgumentException('The password could not be reset. Try a different password.');
         }
         logActivity('password_reset', 'Admin reset password for user #' . $id, 'user-management');
-        echo json_encode(['ok' => true]);
-        exit;
+        umEmit(['ok' => true]);
     }
 
     // save (create / update)
@@ -300,15 +462,40 @@ try {
     $studentId = null;
     umRequirePasswordConfirm($password, $data);
 
-    if ($fullName === '' || $username === '' || $email === '' || !in_array($role, $validRoles, true)) {
-        throw new InvalidArgumentException('Missing or invalid fields');
+    $missing = [];
+    if ($fullName === '') {
+        $missing[] = 'full name';
+    }
+    if ($username === '') {
+        $missing[] = 'username';
+    }
+    if ($email === '') {
+        $missing[] = 'email';
+    }
+    if ($missing !== []) {
+        throw new InvalidArgumentException('Enter ' . implode(', ', $missing) . '.');
+    }
+    if (!in_array($role, $validRoles, true)) {
+        throw new InvalidArgumentException('Select a valid role.');
+    }
+    if (strlen($fullName) > 150) {
+        throw new InvalidArgumentException('Full name must be 150 characters or fewer.');
+    }
+    if (strlen($username) > 80) {
+        throw new InvalidArgumentException('Username must be 80 characters or fewer.');
+    }
+    if (strlen($email) > 190) {
+        throw new InvalidArgumentException('Email must be 190 characters or fewer.');
     }
     if (!in_array($status, $validStatus, true)) {
         $status = 'active';
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new InvalidArgumentException('Invalid email');
+        throw new InvalidArgumentException('Enter a valid email address.');
     }
+
+    umEnsureRoleRow($pdo, $role);
+    umAssertUniqueAccount($pdo, $username, $email, $id);
 
     if ($role === 'student' && preg_match('/^s\d+$/i', $username)) {
         $studentId = strtoupper($username);
@@ -332,12 +519,7 @@ try {
             umApplyUserPassword($id, $password);
             $passwordUpdated = true;
         }
-        try {
-            rcSyncAssignmentFromUserAccount($id, $role, $fullName, $email, $status);
-        } catch (Throwable $e) {
-            error_log('Assignment sync after user save: ' . $e->getMessage());
-            throw $e;
-        }
+        rcSyncAssignmentFromUserAccount($id, $role, $fullName, $email, $status, true);
         if ($role === 'student') {
             require_once ROOT_PATH . '/modules/student-portal/includes/student-profile.php';
             studentPortalEnsureProfileForUser($id, (string) ($studentId ?? ''), $role);
@@ -347,10 +529,13 @@ try {
             ($passwordUpdated ? 'Updated user and password for ' : 'Updated user ') . $username,
             'user-management'
         );
-        echo json_encode([
+        umEmit([
             'ok' => true,
             'updated' => true,
             'password_updated' => $passwordUpdated,
+            'message' => $passwordUpdated
+                ? 'Password updated. The user can sign in with the new password now.'
+                : 'User account updated.',
             'user' => [
                 'id' => $id,
                 'full_name' => $fullName,
@@ -361,11 +546,10 @@ try {
                 'notes' => $notes,
             ],
         ]);
-        exit;
     }
 
     if ($password === '') {
-        throw new InvalidArgumentException('Password is required for new users');
+        throw new InvalidArgumentException('Password is required for new users.');
     }
     $strength = smsValidatePasswordStrength($password);
     if (!$strength['ok']) {
@@ -404,10 +588,11 @@ try {
     }
 
     logActivity('create', 'Created user ' . $username, 'user-management');
-    echo json_encode([
+    umEmit([
         'ok' => true,
         'created' => true,
         'id' => $newUserId,
+        'message' => 'User account created. They can sign in with the username and password you set.',
         'user' => [
             'id' => $newUserId,
             'full_name' => $fullName,
@@ -418,16 +603,14 @@ try {
             'notes' => $notes,
         ],
     ]);
+} catch (InvalidArgumentException $e) {
+    umEmit(['ok' => false, 'error' => $e->getMessage()], 400);
 } catch (PDOException $e) {
-    error_log('save-user PDO: ' . $e->getMessage());
-    http_response_code(400);
-    $msg = 'Could not save user';
-    if (str_contains($e->getMessage(), 'Duplicate')) {
-        $msg = 'Username or email already exists';
-    }
-    echo json_encode(['ok' => false, 'error' => $msg]);
+    umEmit(['ok' => false, 'error' => umPublicDbError($e)], 400);
 } catch (Throwable $e) {
     error_log('save-user: ' . $e->getMessage());
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    umEmit([
+        'ok' => false,
+        'error' => 'The account could not be saved. Nothing was changed. Refresh the page and try again.',
+    ], 500);
 }

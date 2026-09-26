@@ -5,6 +5,14 @@
  */
 require_once __DIR__ . '/../../../config/config.php';
 
+if (!headers_sent()) {
+    header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    header('CDN-Cache-Control: no-store');
+    header('Cloudflare-CDN-Cache-Control: no-store');
+}
+
 $isArchiveView = (($_GET['view'] ?? '') === 'archive');
 $pageTitle     = $isArchiveView ? 'User Archive' : 'User Accounts';
 $activeModule  = 'user-management';
@@ -329,7 +337,7 @@ $archiveUrl  = $accountsUrl . '?view=archive';
 $currentUserId = (int) getCurrentUserId();
 ?>
 
-<link href="<?= BASE_URL ?>/modules/user-management/assets/css/user-management.css?v=dept-head-badge-2" rel="stylesheet">
+<link href="<?= BASE_URL ?>/modules/user-management/assets/css/user-management.css?v=20260926-add-user-errors" rel="stylesheet">
 <meta name="csrf-token" content="<?= e($csrf) ?>">
 
 <?php
@@ -340,7 +348,12 @@ $pageBannerDescription = $isArchiveView
 renderBreadcrumbs($breadcrumbs);
 ?>
 
-<div id="umToastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index:1100;"></div>
+<div id="umToastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index:2000;"></div>
+
+<div id="umPageAlert" class="alert alert-success alert-dismissible mb-3" role="status" hidden>
+    <span id="umPageAlertText"></span>
+    <button type="button" class="btn-close" data-um-dismiss="page-alert" aria-label="Dismiss"></button>
+</div>
 
 <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div></div>
@@ -602,6 +615,7 @@ renderBreadcrumbs($breadcrumbs);
                     <input type="password" name="um_prevent_autofill_pass" value="" autocomplete="current-password" tabindex="-1">
                 </div>
                 <div class="modal-body">
+                    <div id="umUserFormAlert" class="alert alert-danger um-form-alert mb-3" role="alert" hidden></div>
                     <div class="um-modal-avatar-row mb-3">
                         <div class="um-modal-avatar">?</div>
                         <small class="text-muted">Avatar auto-generated from name</small>
@@ -698,41 +712,144 @@ renderBreadcrumbs($breadcrumbs);
 </div>
 <?php endif; ?>
 
-<script src="<?= BASE_URL ?>/modules/user-management/assets/js/user-management.js?v=20260919-live-edit-2"></script>
+<script src="<?= BASE_URL ?>/modules/user-management/assets/js/user-management.js?v=20260926-add-user-errors"></script>
 <script>
 (function () {
     var ENDPOINT = '<?= BASE_URL ?>/modules/user-management/includes/save-user.php';
-    var CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
     var ACCOUNTS = '<?= e($accountsUrl) ?>';
     var ARCHIVE = '<?= e($archiveUrl) ?>';
     var IS_ARCHIVE = <?= $isArchiveView ? 'true' : 'false' ?>;
+
+    function currentCsrf() {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        var input = document.querySelector('#umUserForm [name="csrf_token"]');
+        return (meta && meta.getAttribute('content')) || (input && input.value) || '';
+    }
+
+    function parseJsonLoose(text) {
+        var raw = String(text || '').replace(/^\uFEFF/, '').trim();
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw);
+        } catch (err) { /* response may have a notice before the JSON object */ }
+        var start = raw.indexOf('{');
+        var end = raw.lastIndexOf('}');
+        if (start === -1 || end <= start) return null;
+        try {
+            return JSON.parse(raw.slice(start, end + 1));
+        } catch (err2) {
+            return null;
+        }
+    }
+
+    function unexplainedResponse(status, text) {
+        var sample = String(text || '').replace(/\s+/g, ' ').slice(0, 400);
+        if (/110200|cf-error-code|challenge-platform|cf-challenge|Just a moment/i.test(sample)) {
+            return 'Cloudflare blocked Add User (error 110200). Refresh the page and try again.';
+        }
+        if (status === 401) {
+            return 'Your session has expired. Sign in again, then add the user.';
+        }
+        if (status === 403) {
+            return 'You do not have permission to save this user, or the security token was rejected. Refresh the page and try again.';
+        }
+        if (status === 404) {
+            return 'Add User could not reach the save service (HTTP 404).';
+        }
+        if (status >= 500) {
+            return 'Add User failed because the server had an error (HTTP ' + status + '). Nothing was saved.';
+        }
+        if (!sample) {
+            return 'Add User failed (HTTP ' + status + ') and the server sent an empty response.';
+        }
+        return 'Add User failed (HTTP ' + status + '). The server did not return a usable error message.';
+    }
+
+    function umErrorText(data, fallback) {
+        var error = data && data.error != null ? String(data.error) : '';
+        var message = data && data.message != null ? String(data.message) : '';
+        if (error === 'csrf_invalid') {
+            return 'Your security token expired. Refresh the page and try again.';
+        }
+        if (error === 'session_expired') {
+            return 'Your session has expired. Sign in again, then add the user.';
+        }
+        if (error === 'Forbidden' || error === 'forbidden') {
+            return 'You do not have permission to add or update users.';
+        }
+        if (message && message !== error) return message;
+        if (error) return error;
+        return fallback || 'The account could not be saved.';
+    }
+
+    function showFormAlert(message) {
+        var alertEl = document.getElementById('umUserFormAlert');
+        if (!alertEl) return;
+        alertEl.textContent = message || '';
+        alertEl.hidden = !message;
+        if (message && alertEl.scrollIntoView) {
+            alertEl.scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function showPageAlert(message, type) {
+        var alertEl = document.getElementById('umPageAlert');
+        var textEl = document.getElementById('umPageAlertText');
+        if (!alertEl || !textEl) return;
+        textEl.textContent = message || '';
+        alertEl.classList.remove('alert-success', 'alert-danger', 'alert-warning');
+        alertEl.classList.add(type === 'danger' ? 'alert-danger' : (type === 'warning' ? 'alert-warning' : 'alert-success'));
+        alertEl.hidden = !message;
+        if (message && alertEl.scrollIntoView) {
+            alertEl.scrollIntoView({ block: 'nearest' });
+        }
+    }
 
     function postJson(payload) {
         return fetch(ENDPOINT, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(Object.assign({ csrf_token: CSRF }, payload))
+            cache: 'no-store',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Cache-Control': 'no-store'
+            },
+            body: JSON.stringify(Object.assign({ csrf_token: currentCsrf() }, payload))
         }).then(function (r) {
             return r.text().then(function (text) {
-                try {
-                    return JSON.parse(text);
-                } catch (err) {
-                    return { ok: false, error: 'Save failed' };
+                var data = parseJsonLoose(text);
+                if (data && typeof data === 'object') {
+                    var explicitOk = data.ok === true || (data.success === true && data.ok !== false && !data.error);
+                    data.ok = explicitOk;
+                    if (!explicitOk && !data.error && !data.message) {
+                        data.error = unexplainedResponse(r.status, text);
+                    }
+                    return data;
                 }
+                return { ok: false, error: unexplainedResponse(r.status, text) };
             });
         });
     }
 
-    function passwordMeetsPolicy(form, password) {
-        if (!password) return false;
+    function passwordPolicyMessage(form, password) {
         var box = form.querySelector('.pw-strength');
         var minLen = box ? parseInt(box.getAttribute('data-pw-min') || '8', 10) : 8;
-        return password.length >= minLen
-            && /[A-Z]/.test(password)
-            && /[a-z]/.test(password)
-            && /[0-9]/.test(password)
-            && /[^A-Za-z0-9]/.test(password);
+        if (!minLen || minLen < 1) minLen = 8;
+        var missing = [];
+        if (password.length < minLen) missing.push('at least ' + minLen + ' characters');
+        if (!/[A-Z]/.test(password)) missing.push('an uppercase letter');
+        if (!/[a-z]/.test(password)) missing.push('a lowercase letter');
+        if (!/[0-9]/.test(password)) missing.push('a number');
+        if (!/[^A-Za-z0-9]/.test(password)) missing.push('a special character');
+        if (!missing.length) return '';
+        return 'Password needs ' + missing.join(', ') + '.';
+    }
+
+    function showSaveError(message) {
+        var text = message || 'The account could not be saved.';
+        showFormAlert(text);
+        if (typeof umShowToast === 'function') umShowToast(text, 'danger');
     }
 
     var FACULTY_ROLES = ['hr', 'adviser', 'grammarian', 'panel'];
@@ -962,10 +1079,20 @@ renderBreadcrumbs($breadcrumbs);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('created') === '1') {
+            showPageAlert('User account created. They can sign in with the username and password you set.', 'success');
+        } else if (params.get('updated') === '1') {
+            showPageAlert('User account updated.', 'success');
+        } else if (params.get('password') === '1') {
+            showPageAlert('Password updated. The user can sign in with the new password now.', 'success');
+        }
+
         var form = document.getElementById('umUserForm');
         if (form) {
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
+                showFormAlert('');
                 var fd = new FormData(form);
                 var userId = fd.get('user_id') || '';
                 var pwInput = document.getElementById('um_password');
@@ -976,21 +1103,41 @@ renderBreadcrumbs($breadcrumbs);
                 var password = (!userId || passwordDirty) ? typedPassword : '';
                 var confirm = (!userId || passwordDirty) ? typedConfirm : '';
                 var submitBtn = form.querySelector('[type="submit"]');
+                var fullName = String(fd.get('full_name') || '').trim();
+                var username = String(fd.get('username') || '').trim();
+                var email = String(fd.get('email') || '').trim();
+                var role = String(fd.get('role') || '').trim();
 
+                var missing = [];
+                if (!fullName) missing.push('full name');
+                if (!username) missing.push('username');
+                if (!email) missing.push('email');
+                if (!role) missing.push('role');
+                if (missing.length) {
+                    showSaveError('Enter ' + missing.join(', ') + '.');
+                    return;
+                }
+                if (email.indexOf('@') === -1 || email.indexOf('.') === -1) {
+                    showSaveError('Enter a valid email address.');
+                    return;
+                }
                 if (!userId && !password) {
-                    if (typeof umShowToast === 'function') umShowToast('Password is required for new users.', 'danger');
-                    else alert('Password is required for new users.');
+                    showSaveError('Password is required for new users.');
+                    if (pwInput) pwInput.focus();
                     return;
                 }
                 if (password && password !== confirm) {
-                    if (typeof umShowToast === 'function') umShowToast('New password and confirmation do not match.', 'danger');
-                    else alert('New password and confirmation do not match.');
+                    showSaveError('New password and confirmation do not match.');
+                    if (pwConfirmInput) pwConfirmInput.focus();
                     return;
                 }
-                if ((!userId || password) && password && !passwordMeetsPolicy(form, password)) {
-                    if (typeof umShowToast === 'function') umShowToast('Password does not meet security requirements.', 'danger');
-                    else alert('Password does not meet security requirements.');
-                    return;
+                if (password) {
+                    var policyMessage = passwordPolicyMessage(form, password);
+                    if (policyMessage) {
+                        showSaveError(policyMessage);
+                        if (pwInput) pwInput.focus();
+                        return;
+                    }
                 }
                 var payload = {
                     action: 'save',
@@ -1019,26 +1166,21 @@ renderBreadcrumbs($breadcrumbs);
                         applySavedUserRow(form, savedUser);
                         form.dataset.umSaved = '1';
                         closeUserModal();
-                        if (typeof umShowToast === 'function') {
-                            umShowToast(
-                                data.created
-                                    ? 'User account created.'
-                                    : (data.password_updated
-                                        ? 'Password updated. The user can sign in with the new password now.'
-                                        : 'User account updated.'),
-                                'success'
-                            );
-                        }
+                        var successText = (data && data.message) || (data.created
+                            ? 'User account created. They can sign in with the username and password you set.'
+                            : (data.password_updated
+                                ? 'Password updated. The user can sign in with the new password now.'
+                                : 'User account updated.'));
+                        showPageAlert(successText, 'success');
+                        if (typeof umShowToast === 'function') umShowToast(successText, 'success');
                         form.dataset.pwDirty = '0';
                         if (pwInput) pwInput.value = '';
                         if (pwConfirmInput) pwConfirmInput.value = '';
-                    } else if (typeof umShowToast === 'function') {
-                        umShowToast((data && data.error) || 'Save failed', 'danger');
                     } else {
-                        alert((data && data.error) || 'Save failed');
+                        showSaveError(umErrorText(data, 'The account could not be saved.'));
                     }
                 }).catch(function () {
-                    if (typeof umShowToast === 'function') umShowToast('Network error', 'danger');
+                    showSaveError('Add User could not reach the server. Check your connection and try again.');
                 }).finally(function () {
                     if (submitBtn) submitBtn.disabled = false;
                 });
@@ -1066,6 +1208,7 @@ renderBreadcrumbs($breadcrumbs);
             modalEl.addEventListener('show.bs.modal', function () {
                 form.dataset.umSaved = '0';
                 form.dataset.umLive = '0';
+                showFormAlert('');
             });
 
             modalEl.addEventListener('shown.bs.modal', function () {
@@ -1098,6 +1241,15 @@ renderBreadcrumbs($breadcrumbs);
             });
         }
 
+        var pageAlert = document.getElementById('umPageAlert');
+        if (pageAlert) {
+            pageAlert.addEventListener('click', function (ev) {
+                if (ev.target.closest('[data-um-dismiss="page-alert"]')) {
+                    pageAlert.hidden = true;
+                }
+            });
+        }
+
         document.querySelectorAll('.um-set-status').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 if (btn.hasAttribute('data-um-confirm')) return;
@@ -1112,8 +1264,10 @@ renderBreadcrumbs($breadcrumbs);
                         } else {
                             location.href = ACCOUNTS + '?restored=1';
                         }
-                    } else if (typeof umShowToast === 'function') {
-                        umShowToast(data.error || 'Status update failed', 'danger');
+                    } else {
+                        var statusError = umErrorText(data, 'Status update failed');
+                        showPageAlert(statusError, 'danger');
+                        if (typeof umShowToast === 'function') umShowToast(statusError, 'danger');
                     }
                 });
             });
@@ -1124,7 +1278,11 @@ renderBreadcrumbs($breadcrumbs);
                 if (btn.hasAttribute('data-um-confirm')) return;
                 postJson({ action: 'delete', user_id: btn.dataset.uid }).then(function (data) {
                     if (data.ok) location.href = ARCHIVE + '&purged=1';
-                    else if (typeof umShowToast === 'function') umShowToast(data.error || 'Delete failed', 'danger');
+                    else {
+                        var deleteError = umErrorText(data, 'Delete failed');
+                        showPageAlert(deleteError, 'danger');
+                        if (typeof umShowToast === 'function') umShowToast(deleteError, 'danger');
+                    }
                 });
             });
         });
