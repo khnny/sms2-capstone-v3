@@ -533,6 +533,9 @@ try {
     if (strlen($username) > 80) {
         throw new InvalidArgumentException('Username must be 80 characters or fewer.');
     }
+    if ($id <= 0 && preg_match('/^[a-z]+$/', $username) !== 1) {
+        throw new InvalidArgumentException('Username can contain letters only (A-Z).');
+    }
     if (strlen($email) > 190) {
         throw new InvalidArgumentException('Email must be 190 characters or fewer.');
     }

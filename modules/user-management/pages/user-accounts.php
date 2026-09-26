@@ -628,7 +628,8 @@ renderBreadcrumbs($breadcrumbs);
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Username <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="username" placeholder="e.g. msantos" required autocomplete="off">
+                            <input type="text" class="form-control" name="username" placeholder="e.g. mariasantos" maxlength="80" required autocomplete="off">
+                            <div class="form-text" id="umUsernameHelp">Use letters only (A–Z); numbers are not required.</div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
@@ -1117,6 +1118,11 @@ renderBreadcrumbs($breadcrumbs);
                 if (!role) missing.push('role');
                 if (missing.length) {
                     showSaveError('Enter ' + missing.join(', ') + '.');
+                    return;
+                }
+                if (!userId && !/^[a-z]+$/i.test(username)) {
+                    showSaveError('Username can contain letters only (A-Z).');
+                    form.querySelector('[name="username"]').focus();
                     return;
                 }
                 if (email.indexOf('@') === -1 || email.indexOf('.') === -1) {

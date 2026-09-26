@@ -188,10 +188,12 @@
             var action = trigger.dataset.umAction || 'add';
             var title  = modal.querySelector('#umModalTitle');
             var form   = modal.querySelector('#umUserForm');
+            var usernameHelp = modal.querySelector('#umUsernameHelp');
 
             if (title) {
                 title.textContent = action === 'edit' ? 'Edit User' : 'Add New User';
             }
+            if (usernameHelp) usernameHelp.hidden = action === 'edit';
 
             if (action === 'edit' && form) {
                 var row = trigger.closest ? trigger.closest('.um-user-row') : null;
