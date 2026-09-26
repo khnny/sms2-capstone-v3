@@ -615,10 +615,6 @@ renderBreadcrumbs($breadcrumbs);
                 <input type="hidden" name="user_id">
                 <input type="hidden" name="csrf_token" value="<?= e($csrf) ?>">
                 <input type="hidden" name="action" value="save">
-                <div class="um-autofill-trap" aria-hidden="true" style="position:absolute;left:-9999px;height:0;width:0;overflow:hidden;">
-                    <input type="text" name="um_prevent_autofill_user" value="" autocomplete="username" tabindex="-1">
-                    <input type="password" name="um_prevent_autofill_pass" value="" autocomplete="current-password" tabindex="-1">
-                </div>
                 <div class="modal-body">
                     <div id="umUserFormAlert" class="alert alert-danger um-form-alert mb-3" role="alert" hidden></div>
                     <div class="um-modal-avatar-row mb-3">
@@ -628,7 +624,7 @@ renderBreadcrumbs($breadcrumbs);
                     <div class="row g-3">
                         <div class="col-12">
                             <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="full_name" placeholder="e.g. Maria Santos" required>
+                            <input type="text" class="form-control" name="full_name" placeholder="e.g. Maria Santos" required autocomplete="off">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Username <span class="text-danger">*</span></label>
@@ -636,7 +632,7 @@ renderBreadcrumbs($breadcrumbs);
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
-                            <input type="email" class="form-control" name="email" placeholder="user@bestlink.edu.ph" required>
+                            <input type="text" class="form-control" name="email" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="user@bestlink.edu.ph" required autocomplete="off">
                         </div>
                         <div class="col-md-6 um-pw-row">
                             <label class="form-label fw-semibold um-pw-label">Password <span class="text-danger um-pw-required">*</span></label>
@@ -647,7 +643,7 @@ renderBreadcrumbs($breadcrumbs);
                                 'required' => true,
                                 'minlength' => $minPasswordLen,
                                 'autocomplete' => 'new-password',
-                                'attrs' => 'data-lpignore="true" data-1p-ignore="true"',
+                                'attrs' => 'form="umPasswordSink" readonly data-lpignore="true" data-1p-ignore="true" data-bwignore="true"',
                             ]) ?>
                         </div>
                         <div class="col-md-6 um-pw-confirm-row">
@@ -659,7 +655,7 @@ renderBreadcrumbs($breadcrumbs);
                                 'required' => true,
                                 'minlength' => $minPasswordLen,
                                 'autocomplete' => 'new-password',
-                                'attrs' => 'data-lpignore="true" data-1p-ignore="true"',
+                                'attrs' => 'form="umPasswordSink" readonly data-lpignore="true" data-1p-ignore="true" data-bwignore="true"',
                             ]) ?>
                         </div>
                         <div class="col-md-6">
@@ -712,12 +708,13 @@ renderBreadcrumbs($breadcrumbs);
                     </button>
                 </div>
             </form>
+            <form id="umPasswordSink" autocomplete="off" hidden aria-hidden="true"></form>
         </div>
     </div>
 </div>
 <?php endif; ?>
 
-<script src="<?= BASE_URL ?>/modules/user-management/assets/js/user-management.js?v=20260926-add-user-errors"></script>
+<script src="<?= BASE_URL ?>/modules/user-management/assets/js/user-management.js?v=20260926-um-no-save-password"></script>
 <script>
 (function () {
     var ENDPOINT = '<?= BASE_URL ?>/modules/user-management/includes/save-user.php';
@@ -1144,6 +1141,8 @@ renderBreadcrumbs($breadcrumbs);
                         return;
                     }
                 }
+                if (pwInput) pwInput.value = '';
+                if (pwConfirmInput) pwConfirmInput.value = '';
                 var payload = {
                     action: 'save',
                     user_id: fd.get('user_id') || '',
@@ -1182,9 +1181,13 @@ renderBreadcrumbs($breadcrumbs);
                         if (pwInput) pwInput.value = '';
                         if (pwConfirmInput) pwConfirmInput.value = '';
                     } else {
+                        if (pwInput && password) pwInput.value = password;
+                        if (pwConfirmInput && confirm) pwConfirmInput.value = confirm;
                         showSaveError(umErrorText(data, 'The account could not be saved.'));
                     }
                 }).catch(function () {
+                    if (pwInput && password) pwInput.value = password;
+                    if (pwConfirmInput && confirm) pwConfirmInput.value = confirm;
                     showSaveError('Add User could not reach the server. Check your connection and try again.');
                 }).finally(function () {
                     if (submitBtn) submitBtn.disabled = false;

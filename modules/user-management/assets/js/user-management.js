@@ -217,11 +217,13 @@
                     pwInput.removeAttribute('required');
                     pwInput.value = '';
                     pwInput.setAttribute('readonly', 'readonly');
+                    pwInput.setAttribute('autocomplete', 'new-password');
                 }
                 if (pwConfirm) {
                     pwConfirm.removeAttribute('required');
                     pwConfirm.value = '';
                     pwConfirm.setAttribute('readonly', 'readonly');
+                    pwConfirm.setAttribute('autocomplete', 'new-password');
                 }
                 pwRequired.forEach(function (el) { el.hidden = true; });
                 if (pwStrength) pwStrength.hidden = true;
@@ -240,11 +242,13 @@
                 }
                 if (pwInput) {
                     pwInput.setAttribute('required', 'required');
-                    pwInput.removeAttribute('readonly');
+                    pwInput.setAttribute('readonly', 'readonly');
+                    pwInput.setAttribute('autocomplete', 'new-password');
                 }
                 if (pwConfirm) {
                     pwConfirm.setAttribute('required', 'required');
-                    pwConfirm.removeAttribute('readonly');
+                    pwConfirm.setAttribute('readonly', 'readonly');
+                    pwConfirm.setAttribute('autocomplete', 'new-password');
                 }
                 pwRequired.forEach(function (el) { el.hidden = false; });
                 if (pwStrength) pwStrength.hidden = false;
@@ -292,11 +296,28 @@
             });
         }
 
+        var passwordSink = document.getElementById('umPasswordSink');
+        if (passwordSink) {
+            passwordSink.setAttribute('autocomplete', 'off');
+            passwordSink.addEventListener('submit', function (e) {
+                e.preventDefault();
+            });
+        }
+
         ['um_password', 'um_password_confirm'].forEach(function (id) {
             var field = document.getElementById(id);
             if (!field) return;
+            field.setAttribute('autocomplete', 'new-password');
             field.addEventListener('focus', function () {
                 field.removeAttribute('readonly');
+            });
+            field.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                var userForm = document.getElementById('umUserForm');
+                if (!userForm) return;
+                if (typeof userForm.requestSubmit === 'function') userForm.requestSubmit();
+                else userForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
             });
             field.addEventListener('input', function () {
                 var userForm = document.getElementById('umUserForm');
