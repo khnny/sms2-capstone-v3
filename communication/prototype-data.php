@@ -97,6 +97,17 @@ function smsCommunicationDemoAnnouncements(): array
             'description' => 'Previous room assignment notice retained as an example of an unpublished record.',
             'author' => 'CRAD Research Office',
         ],
+        [
+            'id' => 'ann-9',
+            'title' => 'Research office consultation hours',
+            'category' => 'General',
+            'published_at' => '2026-09-25',
+            'audience' => 'Everyone',
+            'status' => 'Published',
+            'priority' => 'Normal',
+            'description' => 'The research office is available for general process questions every Wednesday from 9:00 AM to 12:00 PM.',
+            'author' => 'CRAD Research Office',
+        ],
     ];
 }
 

@@ -316,10 +316,13 @@ require_once __DIR__ . '/../../includes/layout-start.php';
                         <span class="student-dashboard-kicker">Live notices</span>
                         <h2 id="studentAnnouncementsTitle">Important announcements</h2>
                     </div>
-                    <span class="um-live-badge" id="studentAnnLiveBadge">
-                        <span class="um-live-dot" aria-hidden="true"></span>
-                        <span data-live-label>Live</span>
-                    </span>
+                    <div class="student-dashboard-announcement-actions">
+                        <a href="<?= BASE_URL ?>/communication/announcements.php">Demo bulletin</a>
+                        <span class="um-live-badge" id="studentAnnLiveBadge">
+                            <span class="um-live-dot" aria-hidden="true"></span>
+                            <span data-live-label>Live</span>
+                        </span>
+                    </div>
                 </div>
                 <div id="studentAnnouncementsList">
                     <?php foreach ($studentAnnouncements as $announcement): ?>

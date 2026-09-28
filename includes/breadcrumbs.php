@@ -6,10 +6,7 @@
  */
 function renderBreadcrumbs(array $breadcrumbs): void
 {
-    if (empty($breadcrumbs)) {
-        return;
-    }
-    ?>
+    if (!empty($breadcrumbs)): ?>
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item">
@@ -33,8 +30,17 @@ function renderBreadcrumbs(array $breadcrumbs): void
         </ol>
     </nav>
     <?php
+        renderModulePageBanner($breadcrumbs);
+    endif;
 
-    renderModulePageBanner($breadcrumbs);
+    $scriptPath = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $roleKey = (string) ($GLOBALS['layoutRoleKey'] ?? '');
+    $isSharedDashboard = str_ends_with($scriptPath, '/dashboard/index.php')
+        && $roleKey !== ''
+        && $roleKey !== 'student';
+    if (!empty($GLOBALS['isRoleDashboardHome']) || $isSharedDashboard) {
+        require ROOT_PATH . '/communication/dashboard-announcements.php';
+    }
 }
 
 function renderModulePageBanner(array $breadcrumbs): void

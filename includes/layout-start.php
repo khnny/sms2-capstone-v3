@@ -57,6 +57,12 @@ $isRoleDashboardHome = $layoutRoleKey !== 'student'
     && $roleHomePath !== ''
     && str_ends_with($scriptPath, $roleHomePath)
     && !isset($_GET['id']);
+foreach ($_GET as $queryKey => $_queryValue) {
+    if (!array_key_exists((string) $queryKey, $roleHomeQuery)) {
+        $isRoleDashboardHome = false;
+        break;
+    }
+}
 foreach ($roleHomeQuery as $queryKey => $queryValue) {
     $currentQueryValue = $_GET[$queryKey] ?? null;
     if (!is_scalar($currentQueryValue) || (string) $currentQueryValue !== (string) $queryValue) {
