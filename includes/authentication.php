@@ -634,6 +634,7 @@ function smsDepartmentHeadWorkflowPaths(): array
     return [
         '/account/module-security.php',
         '/account/security.php',
+        '/modules/crad/pages/research-workspace.php',
         '/modules/crad/pages/research-coordinator-management.php',
         '/modules/crad/pages/research-group-approvals.php',
         '/modules/crad/pages/find-contact-adviser.php',
@@ -970,6 +971,7 @@ function requireModuleAccess(string $moduleKey): void
             '/account/module-security.php',
             '/account/security.php',
             '/modules/crad/index.php',
+            '/modules/crad/pages/research-workspace.php',
             '/modules/crad/pages/approved-research.php',
             '/modules/crad/pages/assignment-confirmation.php',
             '/modules/crad/pages/final-manuscript-review.php',
