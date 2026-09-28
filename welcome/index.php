@@ -27,8 +27,6 @@ if (isAuthenticated()) {
 
 $pageTitle = 'Welcome';
 $bodyClass = 'welcome-page';
-$forceTheme = 'light';
-$omitThemeJs = true;
 $omitAppChromeJs = true;
 $welcomeHeroUrl = smsWelcomeHeroImageUrl();
 

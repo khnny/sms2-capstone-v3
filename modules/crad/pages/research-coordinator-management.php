@@ -725,7 +725,7 @@ function rcmPayload(PDO $pdo, ?string $flashMessage = null, bool $flashOk = true
             ? cradRgFlowOverallStatusLabel($overall !== '' ? $overall : (string) ($assignmentRow['status'] ?? ''))
             : (string) ($assignmentRow['status'] ?? '');
         if ($overall === 'confirmed') {
-            $assignmentRow['overall_status_label'] = 'Fully Assigned';
+            $assignmentRow['overall_status_label'] = 'Assigned';
         } elseif ($overall === '' && (($assignmentRow['status'] ?? '') === 'Active')) {
             $assignmentRow['overall_status_label'] = 'Assigned by Department Head';
         }
@@ -2148,6 +2148,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 stats: data.stats || {},
                 eligible: data.eligible || [],
                 pool: data.pool || [],
+                need_adviser: data.need_adviser || [],
+                adviser_pool: data.adviser_pool || [],
                 assignments: data.assignments || [],
                 roster: data.roster || []
             });
@@ -2230,7 +2232,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const isActive = a.status === 'Active';
             const advLabel = String(a.assigned_adviser || a.adviser || '').trim();
             const overall = String(a.overall_status || '').toLowerCase();
-            const overallLabel = String(a.overall_status_label || '').trim() || (overall === 'confirmed' ? 'Fully Assigned' : (isActive ? 'Assigned by Department Head' : String(a.status || '')));
+            const overallLabel = String(a.overall_status_label || '').trim() || (overall === 'confirmed' ? 'Assigned' : (isActive ? 'Assigned by Department Head' : String(a.status || '')));
             const searchText = [a.group_number, a.group_name, a.research_title, advLabel, a.coordinator_name, a.coordinator_email, a.proposal_number, overallLabel].join(' ').toLowerCase();
             let pillCls = 'inactive';
             let pillIcon = 'minus-circle';

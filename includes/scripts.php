@@ -8,7 +8,7 @@
 <script src="<?= BASE_URL ?>/assets/js/sms-icons.js?v=2"></script>
 <!-- SMS 2 App -->
 <?php if (empty($omitThemeJs)): ?>
-<script src="<?= BASE_URL ?>/assets/js/theme.js"></script>
+<script src="<?= BASE_URL ?>/assets/js/theme.js?v=2"></script>
 <?php endif; ?>
 <?php if (empty($omitAppChromeJs)): ?>
 <script src="<?= BASE_URL ?>/assets/js/ph-clock.js"></script>

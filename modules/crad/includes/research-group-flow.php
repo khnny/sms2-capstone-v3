@@ -198,15 +198,21 @@ function cradRgFlowGetStudentGroup(PDO $pdo, string $studentId): ?array
     }
 
     $stmt = $pdo->prepare(
-        "SELECT * FROM `crad_research_groups`
-         WHERE LOWER(TRIM(leader_id)) = LOWER(:sid)
+        "SELECT g.* FROM `crad_research_groups` g
+         WHERE LOWER(TRIM(g.leader_id)) = LOWER(:sid)
+            OR EXISTS (
+                SELECT 1
+                FROM `crad_research_group_members` m
+                WHERE m.research_group_id = g.id
+                  AND LOWER(TRIM(m.student_id)) = LOWER(:sid2)
+            )
          ORDER BY
-            (flow_status IN ('approved','ready_for_assignment','pending_dh_approval','pending_incomplete_approval','draft')) DESC,
-            (title_approval_id IS NULL OR title_approval_id = 0) DESC,
-            id DESC
+            (g.flow_status IN ('approved','ready_for_assignment','pending_dh_approval','pending_incomplete_approval','draft')) DESC,
+            (g.title_approval_id IS NULL OR g.title_approval_id = 0) DESC,
+            g.id DESC
          LIMIT 1"
     );
-    $stmt->execute([':sid' => $studentId]);
+    $stmt->execute([':sid' => $studentId, ':sid2' => $studentId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     return is_array($row) ? $row : null;
@@ -354,24 +360,42 @@ function cradRgFlowStudentAssignmentPresence(PDO $pdo, array $group, string $stu
 /**
  * Latest dual-confirm cycle status for student (empty string when none).
  */
-function cradRgFlowLatestAssignmentCycleStatus(PDO $pdo, string $studentId): string
+function cradRgFlowLatestAssignmentCycleStatus(PDO $pdo, string $studentId, ?array $group = null): string
 {
     cradRgFlowEnsureSchema($pdo);
     $studentId = trim($studentId);
-    if ($studentId === '') {
+    $groupId = (int) ($group['id'] ?? 0);
+    $groupNumber = trim((string) ($group['group_number'] ?? ''));
+    if ($studentId === '' && $groupId <= 0 && $groupNumber === '') {
         return '';
     }
-    $stmt = $pdo->prepare(
-        "SELECT status FROM `crad_research_assignment_cycles`
-         WHERE LOWER(TRIM(student_id)) = LOWER(:sid)
-            OR group_number = :stu
-         ORDER BY (status = 'confirmed') DESC, id DESC
-         LIMIT 1"
-    );
-    $stu = function_exists('cradStudentAssignmentGroupNumber')
-        ? cradStudentAssignmentGroupNumber($studentId)
-        : ('STU-' . strtoupper(preg_replace('/[^A-Za-z0-9_-]/', '', $studentId) ?? 'UNKNOWN'));
-    $stmt->execute([':sid' => $studentId, ':stu' => $stu]);
+    if ($groupId > 0 || $groupNumber !== '') {
+        $stmt = $pdo->prepare(
+            "SELECT status FROM `crad_research_assignment_cycles`
+             WHERE (:gid > 0 AND research_group_id = :gid2)
+                OR (:gn <> '' AND group_number = :gn2)
+             ORDER BY id DESC
+             LIMIT 1"
+        );
+        $stmt->execute([
+            ':gid' => $groupId,
+            ':gid2' => $groupId,
+            ':gn' => $groupNumber,
+            ':gn2' => $groupNumber,
+        ]);
+    } else {
+        $stmt = $pdo->prepare(
+            "SELECT status FROM `crad_research_assignment_cycles`
+             WHERE LOWER(TRIM(student_id)) = LOWER(:sid)
+                OR group_number = :stu
+             ORDER BY id DESC
+             LIMIT 1"
+        );
+        $stu = function_exists('cradStudentAssignmentGroupNumber')
+            ? cradStudentAssignmentGroupNumber($studentId)
+            : ('STU-' . strtoupper(preg_replace('/[^A-Za-z0-9_-]/', '', $studentId) ?? 'UNKNOWN'));
+        $stmt->execute([':sid' => $studentId, ':stu' => $stu]);
+    }
 
     return strtolower(trim((string) ($stmt->fetchColumn() ?: '')));
 }
@@ -416,7 +440,7 @@ function cradRgFlowTitleUnlockState(PDO $pdo, string $studentId): array
     $flow = strtolower(trim((string) ($group['flow_status'] ?? 'draft')));
     $members = cradRgFlowMembersAsTitleJson($pdo, (int) $group['id']);
     $presence = cradRgFlowStudentAssignmentPresence($pdo, $group, $studentId);
-    $cycleStatus = cradRgFlowLatestAssignmentCycleStatus($pdo, $studentId);
+    $cycleStatus = cradRgFlowLatestAssignmentCycleStatus($pdo, $studentId, $group);
     $base['group'] = $group;
     $base['flow_status'] = $flow;
     $base['members'] = $members;
@@ -457,7 +481,7 @@ function cradRgFlowTitleUnlockState(PDO $pdo, string $studentId): array
         return $base;
     }
 
-    $confirmed = ($cycleStatus === 'confirmed') || cradRgFlowAssignmentFullyConfirmed($pdo, $studentId);
+    $confirmed = ($cycleStatus === 'confirmed') || cradRgFlowAssignmentFullyConfirmed($pdo, $studentId, $group);
     if (!$confirmed) {
         $base['stage'] = 'awaiting_confirmation';
         $label = cradRgFlowOverallStatusLabel($cycleStatus !== '' ? $cycleStatus : 'pending_confirmation');
@@ -495,9 +519,9 @@ function cradRgFlowProposalAccessGate(PDO $pdo, string $studentId): array
 /**
  * Dual-confirm ready: both coordinator and adviser confirmed on active cycle.
  */
-function cradRgFlowAssignmentFullyConfirmed(PDO $pdo, string $studentId): bool
+function cradRgFlowAssignmentFullyConfirmed(PDO $pdo, string $studentId, ?array $group = null): bool
 {
-    return cradRgFlowLatestAssignmentCycleStatus($pdo, $studentId) === 'confirmed';
+    return cradRgFlowLatestAssignmentCycleStatus($pdo, $studentId, $group) === 'confirmed';
 }
 
 /**
@@ -949,9 +973,7 @@ function cradRgFlowLatestCycleForGroup(PDO $pdo, string $groupNumber = '', strin
              WHERE (:gid > 0 AND research_group_id = :gid2)
                 OR (:gn <> '' AND group_number = :gn2)
                 OR (:sid <> '' AND LOWER(TRIM(student_id)) = LOWER(:sid2))
-             ORDER BY
-                FIELD(status, 'confirmed', 'waiting_adviser', 'waiting_coordinator', 'pending_confirmation', 'needs_reassignment', 'cancelled') ASC,
-                id DESC
+             ORDER BY id DESC
              LIMIT 1"
         );
         $stmt->execute([
