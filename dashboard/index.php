@@ -548,12 +548,15 @@ $dashboardPeriodKey    = smsDashboardCurrentPeriod();
 $dashboardPeriods      = smsDashboardPeriods();
 $dashboardPeriodMeta   = $dashboardPeriods[$dashboardPeriodKey];
 $dashboardPeriodFactor = $dashboardPeriodMeta['factor'];
+$dashboardIntro        = 'A concise view of your role-specific workspace and priority work.';
 // No period scaling: every card value is a real count from the database.
 
-require_once __DIR__ . '/glass-board.php';
+require_once __DIR__ . '/compact-board.php';
+if (in_array($roleKey, ['crad_officer', 'sms_admin', 'admin', 'superadmin'], true)) {
+    require_once ROOT_PATH . '/communication/dashboard-widgets.php';
+}
 ?>
 
-<script src="<?= BASE_URL ?>/assets/js/dashboard-glass.js"></script>
 <script src="<?= BASE_URL ?>/assets/js/dashboard-live-metrics.js?v=1"></script>
 
 <?php require_once __DIR__ . '/../includes/layout-end.php'; ?>

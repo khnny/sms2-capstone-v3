@@ -13,7 +13,9 @@ function smsCryptoKeyPath(): string
 }
 
 /**
- * 32-byte application key (auto-created once). Keep storage/keys off the web.
+ * 32-byte application key (auto-created once). It is independent of account
+ * passwords and must remain stable to decrypt existing application secrets.
+ * Keep storage/keys off the web.
  */
 function smsCryptoAppKey(): string
 {
@@ -56,34 +58,60 @@ function smsCryptoAppKey(): string
     $path = smsCryptoKeyPath();
     $dir = dirname($path);
     if (!is_dir($dir)) {
-        @mkdir($dir, 0700, true);
-    }
-
-    if (is_readable($path)) {
-        $raw = (string) file_get_contents($path);
-        if (strlen($raw) === 32) {
-            $key = $raw;
-            return $key;
-        }
-        $decoded = base64_decode(trim($raw), true);
-        if (is_string($decoded) && strlen($decoded) === 32) {
-            $key = $decoded;
-            return $key;
+        if (!@mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new RuntimeException('SMS2 encryption key directory could not be created.');
         }
     }
 
-    // 3. Try to generate and write primary key file
-    $generated = random_bytes(32);
-    $written = @file_put_contents($path, base64_encode($generated), LOCK_EX);
-    if ($written !== false) {
+    $lockPath = $path . '.lock';
+    $lock = @fopen($lockPath, 'c');
+    if ($lock === false) {
+        throw new RuntimeException('SMS2 encryption key lock could not be opened.');
+    }
+    @chmod($lockPath, 0600);
+
+    try {
+        if (!flock($lock, LOCK_EX)) {
+            throw new RuntimeException('SMS2 encryption key lock could not be acquired.');
+        }
+
+        clearstatcache(true, $path);
+        if (file_exists($path) || is_link($path)) {
+            if (!is_file($path) || !is_readable($path)) {
+                throw new RuntimeException('SMS2 encryption key exists but cannot be read; refusing to replace it.');
+            }
+            $raw = file_get_contents($path);
+            if (!is_string($raw)) {
+                throw new RuntimeException('SMS2 encryption key could not be read; refusing to replace it.');
+            }
+            if (strlen($raw) === 32) {
+                $key = $raw;
+                return $key;
+            }
+            $decoded = base64_decode(trim($raw), true);
+            if (is_string($decoded) && strlen($decoded) === 32) {
+                $key = $decoded;
+                return $key;
+            }
+
+            throw new RuntimeException('SMS2 encryption key is invalid; refusing to replace it.');
+        }
+
+        // Serialize first-time creation so concurrent requests cannot replace the key.
+        $generated = random_bytes(32);
+        $written = @file_put_contents($path, base64_encode($generated), LOCK_EX);
+        if ($written === false) {
+            throw new RuntimeException(
+                'SMS2 encryption key could not be written. Configure SMS2_APP_KEY or make storage/keys/app.key persistent and writable.'
+            );
+        }
         @chmod($path, 0600);
         $key = $generated;
         return $key;
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
     }
-
-    throw new RuntimeException(
-        'SMS2 encryption key is unavailable. Configure SMS2_APP_KEY or make storage/keys/app.key persistent and writable.'
-    );
 }
 
 function smsCryptoIsEncrypted(string $value): bool

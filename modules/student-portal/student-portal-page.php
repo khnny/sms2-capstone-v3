@@ -127,7 +127,7 @@ $studentPages = [
     'dashboard' => [
         'title' => 'Dashboard',
         'icon' => 'fa-tachometer-alt',
-        'description' => 'View your enrollment, academic, finance, and research overview.',
+        'description' => 'Check your research progress, next steps, and important notices.',
     ],
     'my-profile' => [
         'title' => 'My Profile',
@@ -214,7 +214,7 @@ require_once __DIR__ . '/../../includes/layout-start.php';
 
 <?php renderBreadcrumbs($breadcrumbs); ?>
 
-<div class="student-portal">
+<div class="student-portal <?= $studentPortalPage === 'dashboard' ? 'student-dashboard' : '' ?>">
     <?php if ($processMessage !== ''): ?>
         <div class="alert alert-success student-process-alert" role="alert">
             <?= smsIcon('check-circle', ['class' => 'me-2']) ?><?= htmlspecialchars($processMessage) ?>
@@ -229,20 +229,92 @@ require_once __DIR__ . '/../../includes/layout-start.php';
 
     <?php if ($studentPortalPage === 'dashboard'): ?>
         <?php
-        $studentAnnouncements = smsAnnouncementPublicRows(smsAnnouncementFetch(true, 20));
-        $studentAnnStamp = smsAnnouncementStamp($studentAnnouncements);
+        $studentAnnouncementRows = smsAnnouncementPublicRows(smsAnnouncementFetch(true, 20));
+        $studentAnnouncements = array_slice($studentAnnouncementRows, 0, 3);
+        $studentAnnStamp = smsAnnouncementStamp($studentAnnouncementRows);
+        require_once ROOT_PATH . '/communication/prototype-data.php';
+        $studentUpcomingEvents = array_values(array_filter(
+            smsCommunicationDemoEvents(),
+            static fn(array $event): bool => $event['date'] >= date('Y-m-d')
+                && in_array($event['type'], ['Deadline', 'Defense'], true)
+                && str_contains($event['audience'], 'Research students')
+        ));
+        usort($studentUpcomingEvents, static fn(array $a, array $b): int => strcmp($a['date'], $b['date']));
+        $studentUpcomingEvents = array_slice($studentUpcomingEvents, 0, 2);
+        $studentResearchAction = match ($researchCurrentStatus) {
+            'Not Started' => 'Start your research workflow',
+            'Returned', 'Rejected' => 'Review your research feedback',
+            'CRAD Approved' => 'Continue to your next research step',
+            default => 'Track your research progress',
+        };
         ?>
-        <section class="academic-notices-panel student-announcements-panel mb-3"
+        <div class="student-dashboard-grid">
+            <section class="card student-dashboard-status" aria-labelledby="studentResearchStatusTitle">
+                <div class="card-body">
+                    <div class="student-dashboard-section-heading">
+                        <div>
+                            <span class="student-dashboard-kicker">Research workspace</span>
+                            <h2 id="studentResearchStatusTitle">Current status</h2>
+                        </div>
+                        <span class="student-dashboard-status-badge"><?= htmlspecialchars($researchCurrentStatus) ?></span>
+                    </div>
+                    <p class="student-dashboard-research-title"><?= htmlspecialchars($researchCurrentTitle) ?></p>
+                    <?php if ($researchCurrentAdviser !== ''): ?>
+                        <p class="student-dashboard-meta">Adviser: <?= htmlspecialchars($researchCurrentAdviser) ?></p>
+                    <?php endif; ?>
+                    <?php if ($researchCurrentUpdated !== ''): ?>
+                        <p class="student-dashboard-meta">Updated <?= htmlspecialchars($researchCurrentUpdated) ?></p>
+                    <?php endif; ?>
+                    <a class="student-dashboard-primary-action" href="<?= BASE_URL ?>/modules/student-portal/pages/research-workspace.php">
+                        <?= smsIcon('flask', ['aria-hidden' => 'true']) ?>
+                        <span><?= htmlspecialchars($studentResearchAction) ?></span>
+                        <?= smsIcon('arrow-right', ['aria-hidden' => 'true']) ?>
+                    </a>
+                </div>
+            </section>
+
+            <section class="card student-dashboard-events" aria-labelledby="studentUpcomingTitle">
+                <div class="card-body">
+                    <div class="student-dashboard-section-heading">
+                        <div>
+                            <span class="student-dashboard-kicker">Demo schedule</span>
+                            <h2 id="studentUpcomingTitle">Upcoming research events</h2>
+                        </div>
+                        <a href="<?= BASE_URL ?>/communication/calendar.php">View calendar</a>
+                    </div>
+                    <p class="student-dashboard-meta">Sample only · not live CRAD schedules.</p>
+                    <?php if ($studentUpcomingEvents): ?>
+                        <ul class="student-dashboard-event-list">
+                            <?php foreach ($studentUpcomingEvents as $event): ?>
+                                <li>
+                                    <time datetime="<?= htmlspecialchars($event['date']) ?>">
+                                        <strong><?= htmlspecialchars(date('M d', strtotime($event['date']))) ?></strong>
+                                    </time>
+                                    <div>
+                                        <strong><?= htmlspecialchars($event['title']) ?></strong>
+                                        <span><?= htmlspecialchars($event['start_time']) ?> · <?= htmlspecialchars($event['location']) ?></span>
+                                    </div>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else: ?>
+                        <p class="student-dashboard-empty mb-0">No upcoming sample research events.</p>
+                    <?php endif; ?>
+                </div>
+            </section>
+        </div>
+
+        <section class="academic-notices-panel student-announcements-panel student-dashboard-announcements"
                  id="studentAnnouncements"
                  aria-labelledby="studentAnnouncementsTitle"
                  data-live-url="<?= htmlspecialchars(BASE_URL . '/account/announcements-data.php') ?>"
                  data-stamp="<?= htmlspecialchars($studentAnnStamp) ?>">
             <div class="academic-notices-icon" aria-hidden="true"><?= smsIcon('bullhorn') ?></div>
             <div class="student-announcements-body">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div class="student-dashboard-section-heading">
                     <div>
-                        <span class="ai-insight-kicker">Admin announcements</span>
-                        <h2 class="ai-insight-title" id="studentAnnouncementsTitle">From the administration</h2>
+                        <span class="student-dashboard-kicker">Live notices</span>
+                        <h2 id="studentAnnouncementsTitle">Important announcements</h2>
                     </div>
                     <span class="um-live-badge" id="studentAnnLiveBadge">
                         <span class="um-live-dot" aria-hidden="true"></span>
@@ -253,101 +325,16 @@ require_once __DIR__ . '/../../includes/layout-start.php';
                     <?php foreach ($studentAnnouncements as $announcement): ?>
                         <article class="student-ann-item">
                             <h3><?= htmlspecialchars((string) $announcement['title']) ?></h3>
-                            <?php if (!empty($announcement['image_url'])): ?>
-                                <img class="student-ann-image" src="<?= htmlspecialchars((string) $announcement['image_url']) ?>" alt="">
-                            <?php endif; ?>
                             <p><?= nl2br(htmlspecialchars((string) $announcement['body'])) ?></p>
-                            <small><?= htmlspecialchars((string) $announcement['posted_by']) ?> · <?= htmlspecialchars((string) $announcement['posted_at']) ?></small>
+                            <small><?= htmlspecialchars((string) $announcement['posted_at']) ?></small>
                         </article>
                     <?php endforeach; ?>
                 </div>
-                <p class="ai-insight-copy mb-0" id="studentAnnouncementsEmpty" <?= $studentAnnouncements ? 'hidden' : '' ?>>
-                    No announcements right now.
+                <p class="student-dashboard-empty" id="studentAnnouncementsEmpty" <?= $studentAnnouncements ? 'hidden' : '' ?>>
+                    No current announcements.
                 </p>
             </div>
         </section>
-
-        <div class="row g-3 mb-3 dashboard-stats">
-            <div class="col-md-3">
-                <section class="card stat-card primary">
-                    <div class="card-body d-flex align-items-center">
-                        <div class="stat-icon me-3"><?= smsIcon('user-check') ?></div>
-                        <div>
-                            <h6 class="text-muted">Enrollment Status</h6>
-                            <h4 class="fw-bold mb-0">Enrolled</h4>
-                        </div>
-                    </div>
-                </section>
-            </div>
-            <div class="col-md-3">
-                <section class="card stat-card success">
-                    <div class="card-body d-flex align-items-center">
-                        <div class="stat-icon me-3"><?= smsIcon('star') ?></div>
-                        <div>
-                            <h6 class="text-muted">Current GWA</h6>
-                            <h4 class="fw-bold mb-0">1.75</h4>
-                        </div>
-                    </div>
-                </section>
-            </div>
-            <div class="col-md-3">
-                <section class="card stat-card warning">
-                    <div class="card-body d-flex align-items-center">
-                        <div class="stat-icon me-3"><?= smsIcon('wallet') ?></div>
-                        <div>
-                            <h6 class="text-muted">Balance</h6>
-                            <h4 class="fw-bold mb-0">PHP 8,450.00</h4>
-                        </div>
-                    </div>
-                </section>
-            </div>
-            <div class="col-md-3">
-                <section class="card stat-card info">
-                    <div class="card-body d-flex align-items-center">
-                        <div class="stat-icon me-3"><?= smsIcon('flask') ?></div>
-                        <div>
-                            <h6 class="text-muted">Current Status</h6>
-                            <h4 class="fw-bold mb-0 fs-6"><?= htmlspecialchars($researchCurrentStatus) ?></h4>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
-
-        <div class="row g-3">
-            <div class="col-lg-7">
-                <section class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title fw-semibold mb-3">Today at a Glance</h5>
-                        <div class="student-list">
-                            <div><strong>Web Systems and Technologies</strong><span>8:00 AM - 9:30 AM · Lab 204</span><small>Prof. Maria Santos</small></div>
-                            <div><strong>Database Management</strong><span>10:00 AM - 11:30 AM · Room 302</span><small>Prof. Carlo Reyes</small></div>
-                            <div><strong>Systems Analysis and Design</strong><span>1:00 PM - 4:00 PM · Room 210</span><small>Hybrid session</small></div>
-                        </div>
-                        <div class="student-process-bar">
-                            <a class="btn btn-sms-primary" href="<?= BASE_URL ?>/modules/student-portal/pages/class-schedule.php"><?= smsIcon('calendar-alt', ['class' => 'me-2']) ?>View Schedule</a>
-                            <a class="btn btn-outline-primary" href="<?= BASE_URL ?>/modules/student-portal/pages/grades-portal.php"><?= smsIcon('star-half-alt', ['class' => 'me-2']) ?>Check Grades</a>
-                        </div>
-                    </div>
-                </section>
-            </div>
-            <div class="col-lg-5">
-                <section class="card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title fw-semibold mb-3">Quick Actions</h5>
-                        <div class="student-process-steps">
-                            <div><span>1</span><strong>Submit research proposal</strong><p>Prepare your title proposal for CRAD review.</p></div>
-                            <div><span>2</span><strong>Upload required documents</strong><p>Research Forum payment unlocks document submission.</p></div>
-                            <div><span>3</span><strong>Monitor records</strong><p>Review balance, receipts, and academic standing.</p></div>
-                        </div>
-                        <div class="student-process-bar">
-                            <a class="btn btn-sms-primary" href="<?= BASE_URL ?>/modules/student-portal/pages/research-proposal-submission.php"><?= smsIcon('flask', ['class' => 'me-2']) ?>Research Proposal</a>
-                            <a class="btn btn-outline-primary" href="<?= BASE_URL ?>/modules/student-portal/pages/account-balance.php"><?= smsIcon('wallet', ['class' => 'me-2']) ?>Account Balance</a>
-                        </div>
-                    </div>
-                </section>
-            </div>
-        </div>
     <?php elseif ($studentPortalPage === 'my-profile'): ?>
         <section class="sp-profile-hero card mb-3">
             <div class="card-body">

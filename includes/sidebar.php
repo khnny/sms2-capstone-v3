@@ -22,9 +22,11 @@ $onDashboard = str_ends_with(
 );
 $highlightModule = smsSidebarHighlightModule((string) $activeModule, $roleKey);
 $roleHomeUrl = smsRoleHomeUrl($roleKey);
-$roleHomeLabel = smsRoleHomeLabel($roleKey);
 $roleHomeActive = smsRoleHomeIsActive($roleKey, str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '')), (string) $activePage);
 $showMainDashboard = smsShowsMainDashboard($roleKey);
+$currentScriptPath = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+$isCommunicationCalendar = str_ends_with($currentScriptPath, '/communication/calendar.php');
+$isCommunicationAnnouncements = str_ends_with($currentScriptPath, '/communication/announcements.php');
 $visibleModules = getVisibleModules($MODULES);
 $securitySettingsModule = '';
 $securitySettingsHrefOverride = '';
@@ -60,9 +62,6 @@ if ($securitySettingsModule !== '' && isset($visibleModules[$securitySettingsMod
 }
 
 $studentNavGroups = [
-    'Overview' => [
-        ['slug' => 'dashboard', 'href' => BASE_URL . '/modules/student-portal/pages/dashboard.php', 'icon' => 'fa-tachometer-alt', 'label' => 'Dashboard', 'locked' => false],
-    ],
     'Student Information' => [
         ['slug' => 'my-profile',  'href' => BASE_URL . '/modules/student-portal/pages/my-profile.php',  'icon' => 'fa-user',    'label' => 'My Profile',  'locked' => false],
         ['slug' => 'student-id',  'href' => BASE_URL . '/modules/student-portal/pages/student-id.php',  'icon' => 'fa-id-card', 'label' => 'Student ID',  'locked' => false],
@@ -96,6 +95,12 @@ $studentNavGroups = [
     'System' => [
         ['slug' => 'security-settings', 'href' => BASE_URL . '/account/module-security.php?module=student_portal', 'icon' => 'fa-shield-alt', 'label' => 'Security Settings', 'locked' => false],
     ],
+];
+$studentDashboardItem = [
+    'slug' => 'dashboard',
+    'href' => BASE_URL . '/modules/student-portal/pages/dashboard.php',
+    'icon' => 'fa-tachometer-alt',
+    'label' => 'Dashboard',
 ];
 
 $studentResearchPageSlugs = [
@@ -302,18 +307,18 @@ $cradResearchWorkspaceSlugs = [
 ];
 ?>
 <aside class="sms-sidebar <?= smsIsGrantedAdminRole($roleKey) ? 'admin-sidebar' : '' ?> admin-sidebar-collapsible <?= $sidebarMode === 'faculty_workspace' ? 'workspace-sidebar' : '' ?> <?= ($roleKey === 'research_director' && $sidebarMode === 'faculty_workspace') ? 'research-director-sidebar' : '' ?>" id="smsSidebar" aria-label="Main navigation">
-    <div class="sidebar-brand">
-        <a class="sidebar-brand-link" href="<?= htmlspecialchars($roleHomeUrl) ?>" aria-label="<?= htmlspecialchars(APP_SHORT_NAME . ' ' . $roleHomeLabel) ?>">
-            <img src="<?= e(smsBrandLogoUrl()) ?>" alt="" width="38" height="38">
-            <span class="sidebar-brand-copy">
-                <strong><?= htmlspecialchars(APP_SHORT_NAME) ?></strong>
-                <small><?= htmlspecialchars($roleHomeLabel) ?></small>
-            </span>
-        </a>
-    </div>
     <nav class="sidebar-nav" id="smsSidebarAccordion">
         <ul class="nav flex-column">
             <?php if ($sidebarMode === 'student'): ?>
+                <li class="nav-item sidebar-home-item">
+                    <a class="nav-link sidebar-home-link <?= $activeModule === 'student_portal' && $activePage === 'dashboard' ? 'active' : '' ?>"
+                       href="<?= htmlspecialchars($studentDashboardItem['href']) ?>"
+                       data-title="<?= htmlspecialchars($studentDashboardItem['label']) ?>"
+                       title="<?= htmlspecialchars($studentDashboardItem['label']) ?>">
+                        <?= smsIcon($studentDashboardItem['icon'], ['aria-hidden' => 'true']) ?>
+                        <span><?= htmlspecialchars($studentDashboardItem['label']) ?></span>
+                    </a>
+                </li>
                 <?php foreach ($studentNavGroups as $groupLabel => $groupItems): ?>
                     <?php
                     $groupCollapseId = 'navGrp_' . preg_replace('/[^a-z0-9_]/', '_', strtolower((string) $groupLabel));
@@ -430,10 +435,10 @@ $cradResearchWorkspaceSlugs = [
                     <a class="nav-link sidebar-home-link <?= $roleHomeActive ? 'active' : '' ?>"
                        href="<?= htmlspecialchars($roleHomeUrl) ?>"
                        data-overview-url="<?= htmlspecialchars($roleHomeUrl) ?>"
-                       data-title="<?= htmlspecialchars($roleHomeLabel) ?>"
-                       title="<?= htmlspecialchars($roleHomeLabel) ?>">
+                       data-title="Dashboard"
+                       title="Dashboard">
                         <?= smsIcon('home', ['aria-hidden' => 'true']) ?>
-                        <span><?= htmlspecialchars($roleHomeLabel) ?></span>
+                        <span>Dashboard</span>
                     </a>
                 </li>
                 <?php foreach ($accountNavGroups as $groupLabel => $groupItems): ?>
@@ -519,10 +524,10 @@ $cradResearchWorkspaceSlugs = [
                     <a class="nav-link sidebar-home-link <?= $roleHomeActive ? 'active' : '' ?>"
                        href="<?= htmlspecialchars($roleHomeUrl) ?>"
                        data-overview-url="<?= htmlspecialchars($roleHomeUrl) ?>"
-                       data-title="<?= htmlspecialchars($roleHomeLabel) ?>"
-                       title="<?= htmlspecialchars($roleHomeLabel) ?>">
-                        <?= smsIcon('home', ['aria-hidden' => 'true']) ?>
-                        <span><?= htmlspecialchars($roleHomeLabel) ?></span>
+                       data-title="Dashboard"
+                       title="Dashboard">
+                        <?= smsIcon('layout-grid', ['aria-hidden' => 'true']) ?>
+                        <span>Dashboard</span>
                     </a>
                 </li>
                 <?php endif; ?>
@@ -912,6 +917,26 @@ $cradResearchWorkspaceSlugs = [
                     </li>
                 <?php endif; ?>
                 <?php unset($navModuleKey, $module, $page, $isModuleActive, $overviewUrl, $pageHref, $isPageActive, $secFocus); ?>            <?php endif; ?>
+            <li class="nav-item sidebar-home-item">
+                <a class="nav-link sidebar-home-link sidebar-demo-link <?= $isCommunicationCalendar ? 'active' : '' ?>"
+                   href="<?= e(BASE_URL . '/communication/calendar.php') ?>"
+                   data-title="Research Calendar"
+                   title="Research Calendar">
+                    <?= smsIcon('calendar-alt', ['aria-hidden' => 'true']) ?>
+                    <span>Research Calendar</span>
+                    <span class="sidebar-demo-badge ms-auto">Demo</span>
+                </a>
+            </li>
+            <li class="nav-item sidebar-home-item">
+                <a class="nav-link sidebar-home-link sidebar-demo-link <?= $isCommunicationAnnouncements ? 'active' : '' ?>"
+                   href="<?= e(BASE_URL . '/communication/announcements.php') ?>"
+                   data-title="Announcement Bulletin"
+                   title="Announcement Bulletin">
+                    <?= smsIcon('bullhorn', ['aria-hidden' => 'true']) ?>
+                    <span>Announcement Bulletin</span>
+                    <span class="sidebar-demo-badge ms-auto">Demo</span>
+                </a>
+            </li>
         </ul>
     </nav>
 </aside>

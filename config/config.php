@@ -71,6 +71,7 @@ if (!function_exists('sms2_detect_base_url')) {
         $markers = [
             '/account/',
             '/api/',
+            '/communication/',
             '/dashboard/',
             '/database/',
             '/login/',

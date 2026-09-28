@@ -35,55 +35,6 @@ body.sms-app {
     color: var(--link-color) !important;
 }
 
-.sms-app #smsSidebar .sidebar-brand {
-    min-height: 72px;
-    display: flex;
-    align-items: center;
-    margin: 0;
-    padding: 0.8rem 1rem;
-    border-bottom: 1px solid var(--sms-sidebar-border);
-}
-
-.sms-app #smsSidebar .sidebar-brand-link {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    min-width: 0;
-    color: #172b4d;
-    text-decoration: none;
-}
-
-.sms-app #smsSidebar .sidebar-brand-link img {
-    display: block;
-    width: 38px;
-    height: 38px;
-    flex: 0 0 38px;
-    object-fit: contain;
-}
-
-.sms-app #smsSidebar .sidebar-brand-copy {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.sms-app #smsSidebar .sidebar-brand-copy strong {
-    color: #172b4d;
-    font-size: 0.88rem;
-    font-weight: 750;
-    line-height: 1.2;
-}
-
-.sms-app #smsSidebar .sidebar-brand-copy small {
-    margin-top: 0.18rem;
-    overflow: hidden;
-    color: #7b8798;
-    font-size: 0.68rem;
-    line-height: 1.25;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .sms-app .sidebar-header {
     min-height: 58px;
     padding-inline: 1.15rem;
@@ -570,17 +521,6 @@ body.sms-app {
     }
 }
 
-@media (min-width: 992px) {
-    body.sidebar-collapsed.sms-app #smsSidebar .sidebar-brand {
-        justify-content: center;
-        padding-inline: 0.45rem;
-    }
-
-    body.sidebar-collapsed.sms-app #smsSidebar .sidebar-brand-copy {
-        display: none;
-    }
-}
-
 [data-theme="dark"] body.sms-app {
     color: var(--sms-text);
 }
@@ -594,8 +534,6 @@ body.sms-app {
     -webkit-text-fill-color: currentColor;
 }
 
-[data-theme="dark"] body.sms-app #smsSidebar .sidebar-brand-link,
-[data-theme="dark"] body.sms-app #smsSidebar .sidebar-brand-copy strong,
 [data-theme="dark"] body.sms-app .page-header h1,
 [data-theme="dark"] body.sms-app .student-portal-header h1,
 [data-theme="dark"] body.sms-app .card-title,
@@ -604,10 +542,6 @@ body.sms-app {
 [data-theme="dark"] body.sms-app .modal-title,
 [data-theme="dark"] body.sms-app .offcanvas-title {
     color: var(--sms-heading);
-}
-
-[data-theme="dark"] body.sms-app .sidebar-brand-copy small {
-    color: var(--sms-text-muted);
 }
 
 [data-theme="dark"] body.sms-app #smsSidebar .sidebar-group-heading {
@@ -1322,12 +1256,6 @@ body.sms-app,
     color: var(--sidebar-text);
 }
 
-.sms-app #smsSidebar .sidebar-brand-link,
-.sms-app #smsSidebar .sidebar-brand-copy strong {
-    color: var(--text-primary);
-}
-
-.sms-app #smsSidebar .sidebar-brand-copy small,
 .sms-app #smsSidebar .sidebar-header,
 .sms-app #smsSidebar .sidebar-group-heading {
     color: var(--text-muted);
@@ -1547,11 +1475,11 @@ body.sms-app,
     color: var(--text-muted);
 }
 
-.sms-app a:not(.btn):not(.nav-link):not(.dropdown-item):not(.navbar-brand):not(.sidebar-brand-link) {
+.sms-app a:not(.btn):not(.nav-link):not(.dropdown-item):not(.navbar-brand) {
     color: var(--link-color);
 }
 
-.sms-app a:not(.btn):not(.nav-link):not(.dropdown-item):not(.navbar-brand):not(.sidebar-brand-link):hover {
+.sms-app a:not(.btn):not(.nav-link):not(.dropdown-item):not(.navbar-brand):hover {
     color: var(--primary-hover);
 }
 

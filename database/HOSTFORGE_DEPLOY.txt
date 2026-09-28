@@ -42,10 +42,16 @@ Encryption key (REQUIRED to preserve existing encrypted SMS2 secrets):
 
 The application reads its key in this order: a non-empty SMS2_APP_KEY constant
 in config/local.php; the SMS2_APP_KEY environment variable (then APP_KEY as a
-compatibility fallback); storage/keys/app.key; finally, it generates a new key.
+compatibility fallback); storage/keys/app.key; finally, it generates a key
+only when no key file exists.
 Set SMS2_APP_KEY explicitly in HostForge to the existing key. The Docker build
 intentionally excludes storage/keys/* and creates an empty runtime directory,
 so a key generated inside an ephemeral container is not a persistent key.
+Password changes do not rotate this key. Keep the same HostForge secret across
+password changes, logout/login, restarts, and redeployments. Key-file creation
+is serialized across concurrent requests; if an existing key file is unreadable
+or invalid, the application now reports an error instead of silently replacing
+it with a new key.
 When that key changes, AES-256-GCM cannot authenticate/decrypt existing
 sms2enc1 values (including encrypted TOTP, SMTP, and CAPTCHA secrets).
 
