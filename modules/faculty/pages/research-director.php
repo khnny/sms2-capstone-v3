@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../../config/config.php';
 require_once ROOT_PATH . '/includes/authentication.php';
 require_once ROOT_PATH . '/includes/breadcrumbs.php';
+require_once ROOT_PATH . '/includes/audit.php';
 require_once ROOT_PATH . '/modules/crad/config/config.php';
 require_once ROOT_PATH . '/modules/crad/includes/research-progress-helpers.php';
 require_once ROOT_PATH . '/modules/faculty/includes/research-director-panel-assignment.php';
@@ -182,7 +183,8 @@ function rdSchedulePanelRows(PDO $pdo, int $groupId): array
                     MAX(NULLIF(pma.availability_status, '')),
                     MAX(NULLIF(rpa.availability_status, '')),
                     'Pending'
-                ) AS availability_status
+        ) AS availability_status,
+        MAX(pma.availability_windows_json) AS availability_windows_json
          FROM `crad_research_panel_assignments` rpa
          LEFT JOIN sms2_users u ON u.id = rpa.panel_user_id
          LEFT JOIN `crad_panel_member_availability` pma ON pma.panel_user_id = rpa.panel_user_id
@@ -216,6 +218,32 @@ function rdSchedulePanelNames(PDO $pdo, int $groupId, string $fallback = ''): ar
     }
 
     return $names ?: rdPanelNamesFromString($fallback);
+}
+
+function rdSchedulePanelAvailabilitySummary(array $panel): string
+{
+    $raw = trim((string) ($panel['availability_windows_json'] ?? ''));
+    if ($raw === '') {
+        return 'No weekly windows saved';
+    }
+    $windows = json_decode($raw, true);
+    if (!is_array($windows)) {
+        return 'Saved weekly windows need review';
+    }
+    $labels = [];
+    foreach (['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as $day) {
+        foreach (is_array($windows[$day] ?? null) ? $windows[$day] : [] as $window) {
+            $start = is_array($window) && is_string($window['start'] ?? null) ? $window['start'] : '';
+            $end = is_array($window) && is_string($window['end'] ?? null) ? $window['end'] : '';
+            if (preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $start)
+                && preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $end)
+            ) {
+                $labels[] = substr($day, 0, 3) . ' ' . $start . '–' . $end;
+            }
+        }
+    }
+
+    return $labels ? implode(', ', $labels) : 'No valid weekly windows saved';
 }
 
 function rdScheduleReadyGroup(PDO $pdo, int $groupId, string $defenseType = CRAD_DEFENSE_TYPE_PRE_ORAL): ?array
@@ -873,6 +901,11 @@ if ($crad) {
             } elseif ($panelCountForSchedule !== RD_SCHEDULE_MAX_PANEL_MEMBERS) {
                 $errors[] = 'Exactly 3 Panel Members are required before creating a ' . $defenseType . ' schedule.';
             }
+            if ($group) {
+                foreach (rdScheduleAiReadinessGate($crad, $groupId, $defenseType) as $availabilityError) {
+                    $errors[] = $availabilityError;
+                }
+            }
 
             $dates = is_array($_POST['defense_date'] ?? null) ? $_POST['defense_date'] : [$_POST['defense_date'] ?? ''];
             $starts = is_array($_POST['start_time'] ?? null) ? $_POST['start_time'] : [$_POST['start_time'] ?? ''];
@@ -940,6 +973,18 @@ if ($crad) {
                     $slotErrors = rdScheduleConflictMessages($crad, $groupId, (int) $slot['venue_id'], (string) $slot['start_at'], (string) $slot['end_at'], 0, $defenseType);
                     foreach ($slotErrors as $slotError) {
                         $errors[] = 'Slot ' . ($slotIndex + 1) . ': ' . $slotError;
+                    }
+                    $slotStartTs = strtotime((string) $slot['start_at']);
+                    $slotEndTs = strtotime((string) $slot['end_at']);
+                    if ($slotStartTs !== false && $slotEndTs !== false) {
+                        foreach (rdScheduleAiPanelsOutsideAvailability(
+                            $panelRowsForSchedule,
+                            date('Y-m-d', $slotStartTs),
+                            date('H:i', $slotStartTs),
+                            date('H:i', $slotEndTs)
+                        ) as $panelName) {
+                            $errors[] = 'Slot ' . ($slotIndex + 1) . ': ' . $panelName . ' is not available during this weekly time window.';
+                        }
                     }
                 }
             }
@@ -1021,6 +1066,11 @@ if ($crad) {
                         ]);
                     }
                     $crad->commit();
+                    logActivity(
+                        'create',
+                        count($slots) . ' proposed ' . $defenseType . ' schedule option(s) for research group ' . (string) ($group['group_number'] ?? $groupId) . '.',
+                        'Defense Scheduling'
+                    );
                     $venueMessage = ['type' => 'success', 'text' => count($slots) === 1 ? 'Proposed slot saved.' : count($slots) . ' proposed slot(s) saved.'];
                 } catch (Throwable $e) {
                     if ($crad->inTransaction()) {
@@ -1061,6 +1111,19 @@ if ($crad) {
             $groupId = (int) ($slot['research_group_id'] ?? 0);
             if (!rdIsOfficialResearchGroup($crad, $groupId)) {
                 throw new RuntimeException('Research group is no longer available in the official Capstone Group/Student Registry.');
+            }
+            $scheduleDefenseType = (string) ($slot['defense_type'] ?? CRAD_DEFENSE_TYPE_PRE_ORAL);
+            $availabilityErrors = rdScheduleAiReadinessGate($crad, $groupId, $scheduleDefenseType);
+            foreach (rdScheduleAiPanelsOutsideAvailability(
+                rdSchedulePanelRows($crad, $groupId),
+                date('Y-m-d', strtotime((string) $slot['defense_datetime']) ?: 0),
+                date('H:i', strtotime((string) $slot['defense_datetime']) ?: 0),
+                date('H:i', strtotime((string) $slot['defense_end_datetime']) ?: 0)
+            ) as $panelName) {
+                $availabilityErrors[] = $panelName . ' is not available during this weekly time window.';
+            }
+            if ($availabilityErrors !== []) {
+                throw new RuntimeException(implode(' ', array_unique($availabilityErrors)));
             }
             $venueId = (int) ($slot['venue_id'] ?? 0);
             $conflicts = rdScheduleConflictMessages(
@@ -1187,6 +1250,11 @@ if ($crad) {
                 throw $inner;
             }
             echo json_encode(['ok' => true, 'message' => $scheduleDefenseType . ' schedule confirmed.']);
+            logActivity(
+                'update',
+                'Finalized ' . $scheduleDefenseType . ' schedule #' . $scheduleId . ' for research group ' . (string) (($slot['group_number'] ?? '') ?: $groupId) . '.',
+                'Defense Scheduling'
+            );
         } catch (Throwable $e) {
             if ($crad->inTransaction()) {
                 $crad->rollBack();
@@ -1281,6 +1349,11 @@ if ($crad) {
                 throw $inner;
             }
 
+            logActivity(
+                'update',
+                'Selected defense schedule #' . $scheduleId . ' for research group ' . (string) (($slot['group_number'] ?? '') ?: $groupId) . ' for final review.',
+                'Defense Scheduling'
+            );
             echo json_encode([
                 'ok' => true,
                 'message' => 'Proposed schedule selected for final review.',
@@ -2411,7 +2484,7 @@ renderBreadcrumbs($breadcrumbs);
                     <small>Research Group: <?= $selectedGroupHasOfficial ? 'Already Scheduled' : 'Ready / No Official Schedule' ?></small>
                     <div class="director-panel-list" style="margin-top:.55rem;">
                         <?php foreach ($selectedPanelRows as $panelRow): ?>
-                            <span><?= htmlspecialchars((string) ($panelRow['panel_name'] ?? 'Panel Member')) ?> (<?= htmlspecialchars((string) (($panelRow['availability_status'] ?? '') ?: 'Pending')) ?>)</span>
+                            <span><?= htmlspecialchars((string) ($panelRow['panel_name'] ?? 'Panel Member')) ?> (<?= htmlspecialchars((string) (($panelRow['availability_status'] ?? '') ?: 'Pending')) ?>) · <?= htmlspecialchars(rdSchedulePanelAvailabilitySummary($panelRow)) ?></span>
                         <?php endforeach; ?>
                     </div>
                     <small><?= count($selectedPanelRows) ?> of <?= RD_SCHEDULE_MAX_PANEL_MEMBERS ?> Panel Members assigned</small>
@@ -2424,7 +2497,7 @@ renderBreadcrumbs($breadcrumbs);
                     <?php if ($view === 'manual-scheduling-optimizer'): ?>
                     <div class="director-ai-scheduler" id="directorAiScheduler">
                         <h3><?= smsIcon('magic', ['class' => 'me-1']) ?> AI Scheduling Optimizer</h3>
-                        <p>Set your defense period. AI checks live free schedules and picks different dates, times, and venues where the adviser, panel, and rooms are free.</p>
+                        <p>CRAD rules validate readiness, panel and adviser availability, venue capacity, and conflicts. When configured, GPT-4.1 ranks only valid options and gives advisory reasons; the CRAD Officer reviews and chooses the schedule.</p>
                         <label>
                             <span>Period Start</span>
                             <input type="date" id="aiPeriodStart" min="<?= htmlspecialchars(date('Y-m-d')) ?>" value="<?= htmlspecialchars(date('Y-m-d')) ?>">
@@ -3467,7 +3540,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
 
                 summaryEl.style.display = '';
-                summaryEl.textContent = data.summary || 'AI generated varied free slots. Review and save when ready.';
+                summaryEl.textContent = data.summary || 'CRAD-validated schedule options generated. Review and save when ready.';
 
                 if (hintsEl && Array.isArray(data.slots)) {
                     hintsEl.innerHTML = data.slots.map(function (slot, index) {

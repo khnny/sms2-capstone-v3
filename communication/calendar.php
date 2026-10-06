@@ -5,16 +5,17 @@ require_once __DIR__ . '/../config/config.php';
 require_once ROOT_PATH . '/includes/authentication.php';
 requireAuth();
 
-$pageTitle = 'Research Calendar · Demo';
+$pageTitle = 'Research Calendar';
 $activeModule = '';
 $activePage = 'communication-calendar';
-$breadcrumbs = [['label' => 'Communication Demo', 'url' => null], ['label' => 'Research Calendar', 'url' => null]];
+$breadcrumbs = [['label' => 'Communication', 'url' => null], ['label' => 'Research Calendar', 'url' => null]];
 require_once ROOT_PATH . '/includes/breadcrumbs.php';
 ?>
 <?php require_once ROOT_PATH . '/includes/layout-start.php'; ?>
 <?php require_once __DIR__ . '/prototype-data.php'; ?>
 <?php
-$events = smsCommunicationDemoEvents();
+require_once __DIR__ . '/defense-calendar.php';
+$events = smsCommunicationEventsWithOfficialDefenses(smsCommunicationDemoEvents());
 $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
 <?php renderBreadcrumbs($breadcrumbs); ?>
@@ -22,11 +23,10 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
 <main class="communication-prototype" data-communication-page="calendar" aria-busy="true">
     <header class="communication-page-header">
         <div>
-            <span class="communication-kicker">Communication prototype</span>
+            <span class="communication-kicker">Research communication</span>
             <h1>Research calendar &amp; bulletin</h1>
             <p>One compact view of deadlines, consultations, evaluations, and defense schedules.</p>
         </div>
-        <span class="communication-demo-flag"><?= smsIcon('flask', ['aria-hidden' => 'true']) ?> Demo data · fictional sample records</span>
     </header>
 
     <section class="communication-calendar-toolbar" aria-label="Calendar controls">
@@ -51,7 +51,7 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
             <label>Event type
                 <select class="form-select" data-event-filter="type">
                     <option value="">All event types</option>
-                    <option>Deadline</option><option>Defense</option><option>Consultation</option><option>Evaluation</option><option>Presentation</option>
+                    <option>Deadline</option><option>Defense</option><option>Consultation</option><option>Evaluation</option><option>Presentation</option><option>Research</option>
                 </select>
             </label>
             <label>Audience
@@ -75,18 +75,17 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
 
     <section class="communication-calendar-surface" aria-label="Research event calendar">
         <div class="communication-loading" data-calendar-loading role="status" aria-live="polite">
-            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading demo calendar…
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading calendar…
         </div>
         <div class="communication-calendar-legend">
             <span><i class="deadline"></i> Deadline</span><span><i class="defense"></i> Defense</span>
             <span><i class="consultation"></i> Consultation</span><span><i class="evaluation"></i> Evaluation</span>
-            <span class="communication-demo-flag">All events shown are fictional demo data</span>
         </div>
         <div class="communication-calendar-grid" data-calendar-grid role="grid" aria-label="Monthly research calendar"></div>
         <div class="communication-event-list" data-event-list hidden></div>
         <div class="communication-empty-state" data-event-empty hidden>
-            <span><?= smsIcon('calendar-xmark', ['aria-hidden' => 'true']) ?></span>
-            <strong>No demo events match these filters</strong>
+            <span><?= smsIcon('calendar-times', ['aria-hidden' => 'true']) ?></span>
+            <strong>No events match these filters</strong>
             <p>Change the event type, audience, date range, or research group.</p>
             <button type="button" class="btn btn-sm btn-outline-primary" data-event-reset>Clear filters</button>
         </div>
@@ -99,13 +98,13 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content communication-event-modal">
             <div class="modal-header">
-                <div><span class="communication-kicker">Demo research event</span><h2 class="modal-title" id="communicationEventTitle">Event details</h2></div>
+                <div><span class="communication-kicker">Research event</span><h2 class="modal-title" id="communicationEventTitle">Event details</h2></div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" data-event-details></div>
-            <div class="modal-footer"><span class="communication-demo-flag">Fictional prototype record</span><button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
+            <div class="modal-footer"><button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button></div>
         </div>
     </div>
 </div>
-<script src="<?= e(BASE_URL . '/assets/js/communication-prototype.js?v=1') ?>" defer></script>
+<script src="<?= e(BASE_URL . '/assets/js/communication-prototype.js?v=2') ?>" defer></script>
 <?php require_once ROOT_PATH . '/includes/layout-end.php'; ?>

@@ -610,6 +610,7 @@ CREATE TABLE `crad_panel_member_availability` (
   `id` int(10) UNSIGNED NOT NULL,
   `panel_user_id` int(10) UNSIGNED NOT NULL,
   `availability_status` varchar(40) NOT NULL DEFAULT 'Pending',
+  `availability_windows_json` longtext DEFAULT NULL,
   `notes` text DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `created_at` datetime NOT NULL DEFAULT current_timestamp()
@@ -1023,11 +1024,11 @@ CREATE TABLE `crad_research_progress_ai_analyses` (
   `progress_update_id` int(10) UNSIGNED NOT NULL,
   `attachment_id` int(10) UNSIGNED NOT NULL DEFAULT 0,
   `milestone_name` varchar(180) NOT NULL DEFAULT '',
-  `verdict` varchar(40) NOT NULL DEFAULT 'needs_revision',
-  `grammar_quality` varchar(40) NOT NULL DEFAULT 'fair',
+  `verdict` varchar(40) NOT NULL DEFAULT 'advisory_only',
+  `grammar_quality` varchar(40) NOT NULL DEFAULT 'not_scored',
   `summary` text NOT NULL,
   `notes_json` mediumtext NOT NULL,
-  `source` varchar(40) NOT NULL DEFAULT 'cursor',
+  `source` varchar(40) NOT NULL DEFAULT 'openai_gpt_4_1',
   `analyzed_by` int(10) UNSIGNED NOT NULL DEFAULT 0,
   `analyzed_by_name` varchar(180) NOT NULL DEFAULT '',
   `created_at` datetime NOT NULL DEFAULT current_timestamp()
@@ -2295,4 +2296,3 @@ ALTER TABLE `crad_research_coordinator_assignments`
   ADD COLUMN `confirmed_at` DATETIME DEFAULT NULL AFTER `confirmation_status`;
 ALTER TABLE `crad_research_coordinator_assignments`
   ADD COLUMN `confirmed_by` INT UNSIGNED DEFAULT NULL AFTER `confirmed_at`;
-

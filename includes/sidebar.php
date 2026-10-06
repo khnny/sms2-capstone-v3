@@ -320,23 +320,21 @@ $cradResearchWorkspaceSlugs = [
                     </a>
                 </li>
                 <li class="nav-item sidebar-home-item">
-                    <a class="nav-link sidebar-home-link sidebar-demo-link <?= $isCommunicationCalendar ? 'active' : '' ?>"
+                    <a class="nav-link sidebar-home-link <?= $isCommunicationCalendar ? 'active' : '' ?>"
                        href="<?= e(BASE_URL . '/communication/calendar.php') ?>"
                        data-title="Research Calendar"
                        title="Research Calendar">
                         <?= smsIcon('calendar-alt', ['aria-hidden' => 'true']) ?>
                         <span>Research Calendar</span>
-                        <span class="sidebar-demo-badge ms-auto">Demo</span>
                     </a>
                 </li>
                 <li class="nav-item sidebar-home-item">
-                    <a class="nav-link sidebar-home-link sidebar-demo-link <?= $isCommunicationAnnouncements ? 'active' : '' ?>"
+                    <a class="nav-link sidebar-home-link <?= $isCommunicationAnnouncements ? 'active' : '' ?>"
                        href="<?= e(BASE_URL . '/communication/announcements.php') ?>"
                        data-title="Announcement Bulletin"
                        title="Announcement Bulletin">
                         <?= smsIcon('bullhorn', ['aria-hidden' => 'true']) ?>
                         <span>Announcement Bulletin</span>
-                        <span class="sidebar-demo-badge ms-auto">Demo</span>
                     </a>
                 </li>
                 <?php foreach ($studentNavGroups as $groupLabel => $groupItems): ?>
@@ -552,23 +550,21 @@ $cradResearchWorkspaceSlugs = [
                 </li>
                 <?php endif; ?>
                 <li class="nav-item sidebar-home-item">
-                    <a class="nav-link sidebar-home-link sidebar-demo-link <?= $isCommunicationCalendar ? 'active' : '' ?>"
+                    <a class="nav-link sidebar-home-link <?= $isCommunicationCalendar ? 'active' : '' ?>"
                        href="<?= e(BASE_URL . '/communication/calendar.php') ?>"
                        data-title="Research Calendar"
                        title="Research Calendar">
                         <?= smsIcon('calendar-alt', ['aria-hidden' => 'true']) ?>
                         <span>Research Calendar</span>
-                        <span class="sidebar-demo-badge ms-auto">Demo</span>
                     </a>
                 </li>
                 <li class="nav-item sidebar-home-item">
-                    <a class="nav-link sidebar-home-link sidebar-demo-link <?= $isCommunicationAnnouncements ? 'active' : '' ?>"
+                    <a class="nav-link sidebar-home-link <?= $isCommunicationAnnouncements ? 'active' : '' ?>"
                        href="<?= e(BASE_URL . '/communication/announcements.php') ?>"
                        data-title="Announcement Bulletin"
                        title="Announcement Bulletin">
                         <?= smsIcon('bullhorn', ['aria-hidden' => 'true']) ?>
                         <span>Announcement Bulletin</span>
-                        <span class="sidebar-demo-badge ms-auto">Demo</span>
                     </a>
                 </li>
 

@@ -566,6 +566,8 @@ $MODULES = [
             'Review & Workflow' => [
                 'reviewer-evaluation',
                 'approval-workflows',
+                'panelist-applications',
+                'panel-configuration',
             ],
             'Financial & Tracking' => [
                 'approved-funded',
@@ -601,6 +603,8 @@ $MODULES = [
             ['slug' => 'proposals-applications', 'title' => 'Proposals & Applications'],
             ['slug' => 'reviewer-evaluation', 'title' => 'Reviewer Evaluation'],
             ['slug' => 'approval-workflows', 'title' => 'Approval Workflows'],
+            ['slug' => 'panelist-applications', 'title' => 'Panelist Applications'],
+            ['slug' => 'panel-configuration', 'title' => 'Panel Configuration'],
             ['slug' => 'approved-funded', 'title' => 'Approved & Funded'],
             ['slug' => 'funded-research', 'title' => 'Conduct Funded Research'],
             ['slug' => 'budget-disbursement', 'title' => 'Budget & Disbursement'],

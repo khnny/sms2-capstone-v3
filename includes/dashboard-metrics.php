@@ -299,6 +299,7 @@ function smsDashPreOralMatch(): string
 function smsDashStatCards(string $roleKey): array
 {
     $pdo = smsDashDb();
+    $viewerId = function_exists('getCurrentUserId') ? (int) getCurrentUserId() : 0;
 
     $card = static fn(string $icon, string $label, $value, string $type, string $deltaLabel, string $liveKey): array => [
         'icon' => $icon, 'label' => $label,
@@ -382,17 +383,19 @@ function smsDashStatCards(string $roleKey): array
 
         case 'crad_officer':
             return [
-                $card('fa-users', 'Research Groups', smsDashCount($pdo, 'crad_research_groups'), 'primary', 'registered groups', 'research_groups'),
-                $card('fa-check-double', 'Approved Research', smsDashCount($pdo, 'crad_research_groups', "status = 'Approved'"), 'success', 'title approved', 'approved_research'),
+                $card('fa-file-lines', 'Total Applications', smsDashCount($pdo, 'crad_research_proposals'), 'primary', 'submitted proposals', 'applications_total'),
+                $card('fa-clock', 'Pending Applications', smsDashCount($pdo, 'crad_research_proposals', "status IN ('Submitted','In Progress','Panel Assigned')"), 'warning', 'awaiting decision', 'applications_pending'),
+                $card('fa-check-double', 'Approved Applications', smsDashCount($pdo, 'crad_research_proposals', "status = 'Approved'"), 'success', 'approved proposals', 'applications_approved'),
+                $card('fa-calendar-alt', 'Scheduled Defenses', smsDashCount($pdo, 'crad_research_defense_schedules', "defense_datetime IS NOT NULL AND LOWER(COALESCE(status,'')) IN ('scheduled','finalized')"), 'info', 'confirmed schedules', 'defenses_scheduled'),
+                $card('fa-check-circle', 'Completed Defenses', smsDashCount($pdo, 'crad_research_defense_schedules', "LOWER(COALESCE(status,'')) IN ('completed','passed')"), 'success', 'completed reviews', 'defenses_completed'),
                 $card('fa-user-tie', 'Panel Members', smsDashCount($pdo, 'crad_research_panel_assignments'), 'info', 'panelists assigned', 'panel_assigned'),
-                $card('fa-stamp', 'Clearance Pending', smsDashCount($pdo, 'crad_research_services_clearances', "status <> 'clearance_done'"), 'warning', 'awaiting CRAD', 'clearance_pending'),
             ];
 
         case 'research_coordinator':
             return [
-                $card('fa-flask', 'Research Groups', smsDashCount($pdo, 'crad_research_groups'), 'primary', 'registered', 'research_groups'),
-                $card('fa-check-double', 'Approved Research', smsDashCount($pdo, 'crad_research_groups', "status = 'Approved'"), 'success', 'title approved', 'approved_research'),
-                $card('fa-user-tie', 'Adviser Assigned', smsDashCount($pdo, 'crad_research_adviser_assignments'), 'info', 'adviser assigned', 'adviser_assigned'),
+                $card('fa-flask', 'Assigned Research', smsDashCount($pdo, 'crad_research_coordinator_assignments', "coordinator_user_id = ? AND status = 'Active'", [$viewerId]), 'primary', 'active groups', 'coordinator_groups'),
+                $card('fa-check-double', 'Approved Research', smsDashCount($pdo, 'crad_research_groups', "status = 'Approved' AND id IN (SELECT research_group_id FROM crad_research_coordinator_assignments WHERE coordinator_user_id = ? AND status = 'Active')", [$viewerId]), 'success', 'assigned groups', 'coordinator_approved'),
+                $card('fa-user-tie', 'Adviser Assignments', smsDashCount($pdo, 'crad_research_adviser_assignments', "research_group_id IN (SELECT research_group_id FROM crad_research_coordinator_assignments WHERE coordinator_user_id = ? AND status = 'Active')", [$viewerId]), 'info', 'within assigned groups', 'coordinator_advisers'),
                 $card('fa-tasks', 'Open Cycles', smsDashCount($pdo, 'crad_research_assignment_cycles', "status <> 'completed'"), 'warning', 'assignment cycles', 'cycles_open'),
             ];
 
@@ -409,17 +412,19 @@ function smsDashStatCards(string $roleKey): array
             $isPanel = ($roleKey === 'panel');
             return [
                 $card('fa-flask', 'Assigned Research', $isPanel
-                    ? smsDashCount($pdo, 'crad_research_panel_assignments')
-                    : smsDashCount($pdo, 'crad_research_adviser_assignments'), 'primary', 'assignments', $isPanel ? 'panel_assigned' : 'adviser_assigned'),
-                $card('fa-calendar', 'Defense Schedules', smsDashCount($pdo, 'crad_research_defense_schedules'), 'warning', 'scheduled', 'defense_total'),
+                    ? smsDashCount($pdo, 'crad_research_panel_assignments', 'panel_user_id = ?', [$viewerId])
+                    : smsDashCount($pdo, 'crad_research_adviser_assignments', 'adviser_user_id = ?', [$viewerId]), 'primary', 'your assignments', $isPanel ? 'my_panel_assigned' : 'my_adviser_assigned'),
+                $card('fa-calendar', 'Defense Schedules', smsDashCount($pdo, 'crad_research_defense_schedules', $isPanel
+                    ? 'research_group_id IN (SELECT research_group_id FROM crad_research_panel_assignments WHERE panel_user_id = ?)'
+                    : 'research_group_id IN (SELECT research_group_id FROM crad_research_adviser_assignments WHERE adviser_user_id = ?)', [$viewerId]), 'warning', 'your assigned groups', $isPanel ? 'my_panel_defenses' : 'my_adviser_defenses'),
                 $card('fa-folder-open', $isPanel ? 'Panel Evaluations' : 'Chapter Submissions',
                     $isPanel
-                        ? smsDashCount($pdo, 'crad_preoral_defense_evaluations')
-                        : smsDashCount($pdo, 'crad_chapter_submissions'), 'info', 'on record', $isPanel ? 'panel_evaluations' : 'chapter_submissions'),
+                        ? smsDashCount($pdo, 'crad_preoral_defense_evaluations', 'panel_user_id = ?', [$viewerId])
+                        : smsDashCount($pdo, 'crad_chapter_submissions', 'research_group_id IN (SELECT research_group_id FROM crad_research_adviser_assignments WHERE adviser_user_id = ?)', [$viewerId]), 'info', 'your assigned groups', $isPanel ? 'my_panel_evaluations' : 'my_adviser_chapters'),
                 $card('fa-check-square', $isPanel ? 'Final Defense Evaluations' : 'Research Groups',
                     $isPanel
-                        ? smsDashCount($pdo, 'crad_final_defense_evaluations')
-                        : smsDashCount($pdo, 'crad_research_groups'), 'success', 'recorded', $isPanel ? 'final_evaluations' : 'research_groups'),
+                        ? smsDashCount($pdo, 'crad_final_defense_evaluations', 'panel_user_id = ?', [$viewerId])
+                        : smsDashCount($pdo, 'crad_research_groups', 'id IN (SELECT research_group_id FROM crad_research_adviser_assignments WHERE adviser_user_id = ?)', [$viewerId]), 'success', 'your assigned work', $isPanel ? 'my_panel_final_evaluations' : 'my_adviser_groups'),
             ];
 
         case 'research_director':
@@ -472,6 +477,7 @@ function smsDashLiveValues(string $roleKey): array
  */
 function smsDashLiveValue(?PDO $pdo, string $key)
 {
+    $viewerId = function_exists('getCurrentUserId') ? (int) getCurrentUserId() : 0;
     switch ($key) {
         case 'users_total':       return smsDashCount($pdo, 'sms2_users');
         case 'users_recent':      return smsDashCount($pdo, 'sms2_users', 'last_seen_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)');
@@ -487,6 +493,22 @@ function smsDashLiveValue(?PDO $pdo, string $key)
         case 'sections_total':    return smsDashCount($pdo, 'sms2_student_profiles', "TRIM(COALESCE(section,'')) <> ''");
 
         case 'research_groups':   return smsDashCount($pdo, 'crad_research_groups');
+        case 'coordinator_groups': return smsDashCount($pdo, 'crad_research_coordinator_assignments', "coordinator_user_id = ? AND status = 'Active'", [$viewerId]);
+        case 'coordinator_approved': return smsDashCount($pdo, 'crad_research_groups', "status = 'Approved' AND id IN (SELECT research_group_id FROM crad_research_coordinator_assignments WHERE coordinator_user_id = ? AND status = 'Active')", [$viewerId]);
+        case 'coordinator_advisers': return smsDashCount($pdo, 'crad_research_adviser_assignments', 'research_group_id IN (SELECT research_group_id FROM crad_research_coordinator_assignments WHERE coordinator_user_id = ? AND status = \'Active\')', [$viewerId]);
+        case 'my_adviser_assigned': return smsDashCount($pdo, 'crad_research_adviser_assignments', 'adviser_user_id = ?', [$viewerId]);
+        case 'my_adviser_defenses': return smsDashCount($pdo, 'crad_research_defense_schedules', 'research_group_id IN (SELECT research_group_id FROM crad_research_adviser_assignments WHERE adviser_user_id = ?)', [$viewerId]);
+        case 'my_adviser_chapters': return smsDashCount($pdo, 'crad_chapter_submissions', 'research_group_id IN (SELECT research_group_id FROM crad_research_adviser_assignments WHERE adviser_user_id = ?)', [$viewerId]);
+        case 'my_adviser_groups': return smsDashCount($pdo, 'crad_research_groups', 'id IN (SELECT research_group_id FROM crad_research_adviser_assignments WHERE adviser_user_id = ?)', [$viewerId]);
+        case 'my_panel_assigned': return smsDashCount($pdo, 'crad_research_panel_assignments', 'panel_user_id = ?', [$viewerId]);
+        case 'my_panel_defenses': return smsDashCount($pdo, 'crad_research_defense_schedules', 'research_group_id IN (SELECT research_group_id FROM crad_research_panel_assignments WHERE panel_user_id = ?)', [$viewerId]);
+        case 'my_panel_evaluations': return smsDashCount($pdo, 'crad_preoral_defense_evaluations', 'panel_user_id = ?', [$viewerId]);
+        case 'my_panel_final_evaluations': return smsDashCount($pdo, 'crad_final_defense_evaluations', 'panel_user_id = ?', [$viewerId]);
+        case 'applications_total': return smsDashCount($pdo, 'crad_research_proposals');
+        case 'applications_pending': return smsDashCount($pdo, 'crad_research_proposals', "status IN ('Submitted','In Progress','Panel Assigned')");
+        case 'applications_approved': return smsDashCount($pdo, 'crad_research_proposals', "status = 'Approved'");
+        case 'defenses_scheduled': return smsDashCount($pdo, 'crad_research_defense_schedules', "defense_datetime IS NOT NULL AND LOWER(COALESCE(status,'')) IN ('scheduled','finalized')");
+        case 'defenses_completed': return smsDashCount($pdo, 'crad_research_defense_schedules', "LOWER(COALESCE(status,'')) IN ('completed','passed')");
         case 'approved_research': return smsDashCount($pdo, 'crad_research_groups', "status = 'Approved'");
         case 'adviser_assigned':  return smsDashCount($pdo, 'crad_research_adviser_assignments');
         case 'panel_assigned':    return smsDashCount($pdo, 'crad_research_panel_assignments');

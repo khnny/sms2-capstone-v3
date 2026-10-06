@@ -1,35 +1,66 @@
 <?php
+require_once ROOT_PATH . '/config/database.php';
 require_once __DIR__ . '/prototype-data.php';
+require_once __DIR__ . '/defense-calendar.php';
 
-$communicationEvents = smsCommunicationDemoEvents();
+$communicationEvents = smsCommunicationEventsWithOfficialDefenses(smsCommunicationDemoEvents());
 $communicationToday = date('Y-m-d');
+$communicationRole = function_exists('smsNormalizeRoleKey') ? smsNormalizeRoleKey(getCurrentUserRoleKey()) : getCurrentUserRoleKey();
+$communicationAudiences = smsCanManageDefenseScheduling($communicationRole)
+    ? ['Everyone', 'Faculty & panel', 'Research students & panel']
+    : ($communicationRole === 'student'
+    ? ['Everyone', 'Research students', 'Research students & panel']
+    : (in_array($communicationRole, ['adviser', 'panel', 'research_coordinator', 'department_head', 'crad_officer', 'research_director', 'department_chair', 'grammarian'], true)
+        ? ['Everyone', 'Faculty & panel', 'Research students & panel']
+        : ['Everyone']));
 $communicationUpcomingEvents = array_values(array_filter(
     $communicationEvents,
-    static fn(array $event): bool => $event['date'] >= $communicationToday
-        && in_array($event['type'], ['Deadline', 'Defense'], true)
+    static function (array $event) use ($communicationToday, $communicationAudiences): bool {
+        $startsAt = strtotime($event['date'] . ' ' . $event['start_time']);
+        return $event['date'] >= $communicationToday
+            && $startsAt !== false
+            && $startsAt >= time()
+            && in_array($event['audience'], $communicationAudiences, true);
+    }
 ));
 usort(
     $communicationUpcomingEvents,
     static fn(array $a, array $b): int => strcmp($a['date'], $b['date'])
 );
-$communicationUpcomingEvents = array_slice($communicationUpcomingEvents, 0, 2);
+$communicationUpcomingEvents = array_slice($communicationUpcomingEvents, 0, 3);
+$communicationRecentActivity = [];
+try {
+    $activityPdo = db();
+    if ($activityPdo instanceof PDO) {
+        $activityStmt = $activityPdo->prepare(
+            'SELECT action, module_key, detail, created_at
+               FROM `sms2_activity_logs`
+              WHERE user_id = ?
+              ORDER BY created_at DESC, id DESC
+              LIMIT 4'
+        );
+        $activityStmt->execute([(int) getCurrentUserId()]);
+        $communicationRecentActivity = $activityStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+} catch (Throwable $e) {
+    error_log('communication dashboard activity: ' . $e->getMessage());
+}
 ?>
-<section class="communication-dashboard" aria-label="Research calendar prototype data">
+<section class="communication-dashboard" aria-label="Research calendar and recent activity">
     <div class="communication-dashboard-heading">
         <div>
-            <span class="communication-kicker">Prototype data</span>
-            <h2>Upcoming research</h2>
+            <span class="communication-kicker">Plan ahead</span>
+            <h2>Research activity</h2>
         </div>
-        <span class="communication-demo-flag">Demo · not live CRAD records</span>
     </div>
     <div class="communication-dashboard-grid">
         <section class="communication-dashboard-panel" aria-labelledby="dashboardUpcomingTitle">
             <div class="communication-panel-heading">
                 <div>
-                    <h3 id="dashboardUpcomingTitle">Next deadlines and defenses</h3>
-                    <p>Next deadlines and defense schedules</p>
+                    <h3 id="dashboardUpcomingTitle">Upcoming research events</h3>
+                    <p>Deadlines, consultations, and defense schedules</p>
                 </div>
-                <a href="<?= e(BASE_URL . '/communication/calendar.php') ?>">Calendar <span aria-hidden="true">→</span></a>
+                <a href="<?= e(BASE_URL . '/communication/calendar.php') ?>">View calendar <span aria-hidden="true">→</span></a>
             </div>
             <?php if ($communicationUpcomingEvents): ?>
                 <ul class="communication-upcoming-list">
@@ -48,7 +79,25 @@ $communicationUpcomingEvents = array_slice($communicationUpcomingEvents, 0, 2);
                     <?php endforeach; ?>
                 </ul>
             <?php else: ?>
-                <p class="communication-empty">No upcoming demo events.</p>
+                <p class="communication-empty">No upcoming events.</p>
+            <?php endif; ?>
+        </section>
+        <section class="communication-dashboard-panel" aria-labelledby="dashboardActivityTitle">
+            <div class="communication-panel-heading">
+                <div><h3 id="dashboardActivityTitle">Recent activity</h3><p>Latest updates from your account</p></div>
+            </div>
+            <?php if ($communicationRecentActivity): ?>
+                <ul class="communication-recent-activity">
+                    <?php foreach ($communicationRecentActivity as $activity): ?>
+                        <li>
+                            <span class="communication-activity-icon"><?= smsIcon('history', ['aria-hidden' => 'true']) ?></span>
+                            <div><strong><?= e(ucfirst(str_replace('_', ' ', (string) $activity['action']))) ?></strong><p><?= e((string) $activity['detail']) ?></p></div>
+                            <time datetime="<?= e((string) $activity['created_at']) ?>"><?= e(date('M j, g:i A', strtotime((string) $activity['created_at']))) ?></time>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php else: ?>
+                <p class="communication-empty">Your recent actions will appear here.</p>
             <?php endif; ?>
         </section>
     </div>

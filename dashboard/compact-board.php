@@ -6,7 +6,8 @@
  */
 $dashboardSummary = array_slice(smsDashSummary($roleKey), 0, 2);
 $dashboardActions = array_slice($visibleModules, 0, 3, true);
-$dashboardPriorityCards = array_slice($statCards, 0, 3);
+$dashboardPriorityCards = array_slice($statCards, 0, $roleKey === 'crad_officer' ? 5 : 3);
+$showDashboardStatusChart = $roleKey === 'crad_officer';
 foreach ($statCards as $cardIndex => $card) {
     if (
         $cardIndex >= count($dashboardPriorityCards)
@@ -16,6 +17,18 @@ foreach ($statCards as $cardIndex => $card) {
         break;
     }
 }
+$dashboardStatusChart = [];
+if ($roleKey === 'crad_officer') {
+    $dashboardStatusChart = smsDashGroup(
+        smsDashDb(),
+        "SELECT COALESCE(NULLIF(TRIM(status),''),'Unspecified') AS label, COUNT(*) AS total
+              FROM `crad_research_proposals`
+          GROUP BY label
+          ORDER BY total DESC
+          LIMIT 5"
+    );
+}
+$dashboardStatusChartMax = max(1, ...array_map(static fn(array $row): int => (int) ($row['total'] ?? 0), $dashboardStatusChart ?: [['total' => 1]]));
 ?>
 <div class="dashboard-shell glass-dashboard academic-dashboard">
     <header class="page-header dashboard-page-header sms-page-header">
@@ -46,7 +59,7 @@ foreach ($statCards as $cardIndex => $card) {
         </div>
     </header>
 
-    <div class="glass-board dashboard-compact-board"
+    <div class="glass-board dashboard-compact-board role-<?= htmlspecialchars($roleKey) ?>"
          id="glassBoard"
          data-role="<?= htmlspecialchars($roleKey) ?>"
          data-period="<?= htmlspecialchars($dashboardPeriodKey) ?>"
@@ -126,6 +139,23 @@ foreach ($statCards as $cardIndex => $card) {
                     <?php endif; ?>
                 </div>
             </section>
+
+            <?php if ($showDashboardStatusChart): ?>
+                <section class="glass-panel dashboard-status-chart" aria-labelledby="dashboardResearchStatusTitle">
+                    <div class="glass-panel-body">
+                        <div class="dashboard-section-heading">
+                            <div><h2 id="dashboardResearchStatusTitle" class="glass-panel-title">Application status</h2><p class="glass-panel-sub">Live proposal totals by review stage</p></div>
+                        </div>
+                        <ul>
+                            <?php foreach ($dashboardStatusChart as $row): ?>
+                                <?php $barWidth = (int) round(((int) $row['total'] / $dashboardStatusChartMax) * 100); ?>
+                                <li><div><span><?= htmlspecialchars((string) $row['label']) ?></span><strong><?= number_format((int) $row['total']) ?></strong></div><span class="dashboard-status-track"><span style="width: <?= $barWidth ?>%"></span></span></li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <?php if (!$dashboardStatusChart): ?><p class="dashboard-compact-empty">Application totals will appear here when proposals are submitted.</p><?php endif; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
         </div>
     </div>
 </div>

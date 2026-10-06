@@ -55,13 +55,16 @@ CREATE TABLE `sms2_admin_announcements` (
   `title` varchar(180) NOT NULL,
   `body` text NOT NULL,
   `image_path` varchar(255) DEFAULT NULL,
-  `status` enum('published','unpublished') NOT NULL DEFAULT 'published',
-  `audience` varchar(40) NOT NULL DEFAULT 'student',
+  `status` enum('draft','published','unpublished','archived') NOT NULL DEFAULT 'draft',
+  `audience` varchar(40) NOT NULL DEFAULT 'all',
+  `category` varchar(40) NOT NULL DEFAULT 'General',
   `created_by` int(10) UNSIGNED DEFAULT NULL,
   `created_by_name` varchar(150) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT current_timestamp(),
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `published_at` datetime DEFAULT NULL
+  `published_at` datetime DEFAULT NULL,
+  `scheduled_for` date DEFAULT NULL,
+  `expires_at` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------

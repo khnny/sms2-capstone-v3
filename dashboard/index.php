@@ -39,6 +39,50 @@ if ($isStudentPortal):
         </div>
     </div>
 
+    <?php require ROOT_PATH . '/communication/dashboard-announcements.php'; ?>
+    <?php require ROOT_PATH . '/communication/dashboard-widgets.php'; ?>
+
+    <?php if (strtoupper(trim((string) $studentId)) === 'S230000001'): ?>
+    <section class="student-ai-example" aria-labelledby="studentAiExampleTitle">
+        <div class="student-ai-example-header">
+            <div>
+                <span class="student-ai-example-kicker">Example analysis</span>
+                <h2 id="studentAiExampleTitle"><?= smsIcon('robot', ['aria-hidden' => 'true']) ?>AI Research Assistant</h2>
+                <p>An example of the writing observations an Adviser may review.</p>
+            </div>
+            <span class="student-ai-example-badge">Read-only example</span>
+        </div>
+        <div class="student-ai-example-document">
+            <span class="student-ai-example-file-icon"><?= smsIcon('file-text', ['aria-hidden' => 'true']) ?></span>
+            <span><strong>Chapter 1 - Introduction.docx</strong><small>DOCX · 1.8 MB · Chapter 1</small></span>
+            <span class="student-ai-example-status">Writing review</span>
+        </div>
+        <div class="student-ai-example-grid">
+            <div class="student-ai-example-summary">
+                <h3>Summary</h3>
+                <p>The study explores how a community-based flood monitoring and early warning system could support timely, localized alerts for residents and local responders.</p>
+                <h4>Key points</h4>
+                <ul>
+                    <li>Combines sensor readings with a community notification process.</li>
+                    <li>Frames the project around preparedness and response time.</li>
+                </ul>
+            </div>
+            <div class="student-ai-example-observations">
+                <h3>Areas to review</h3>
+                <details>
+                    <summary><span class="student-ai-example-tag attention">Attention</span>Clarify the study boundary</summary>
+                    <p>State which locations, users, and alert conditions are included in the initial system scope.</p>
+                </details>
+                <details>
+                    <summary><span class="student-ai-example-tag review">Review</span>Keep terminology consistent</summary>
+                    <p>Use one term consistently for the alert platform throughout the chapter.</p>
+                </details>
+            </div>
+        </div>
+        <p class="student-ai-example-disclaimer">Illustrative content only. It is not based on your submission and does not change your research status or evaluation.</p>
+    </section>
+    <?php endif; ?>
+
     <section class="academic-notices-panel" aria-labelledby="studentAcademicNoticesTitle">
         <div class="academic-notices-icon" aria-hidden="true"><?= smsIcon('bullhorn') ?></div>
         <div>
@@ -552,9 +596,8 @@ $dashboardIntro        = 'A concise view of your role-specific workspace and pri
 // No period scaling: every card value is a real count from the database.
 
 require_once __DIR__ . '/compact-board.php';
-if (in_array($roleKey, ['crad_officer', 'sms_admin', 'admin', 'superadmin'], true)) {
-    require_once ROOT_PATH . '/communication/dashboard-widgets.php';
-}
+require ROOT_PATH . '/communication/dashboard-announcements.php';
+require ROOT_PATH . '/communication/dashboard-widgets.php';
 ?>
 
 <script src="<?= BASE_URL ?>/assets/js/dashboard-live-metrics.js?v=1"></script>

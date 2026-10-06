@@ -10,9 +10,10 @@
  * sms2_* and crad_* table prefixes (see config/tables.php).
  */
 
-// Optional: Cursor API key for AI document analysis and scheduling helpers.
-// Prefer storage/keys/cursor_api_key (gitignored) instead of committing a real key.
-// define('CURSOR_API_KEY', '');
+// Optional: OpenAI GPT-4.1 advisory document analysis and schedule ranking.
+// Configure SMS2_OPENAI_API_KEY / OPENAI_API_KEY in the server environment,
+// or store the key in storage/keys/openai_api_key (gitignored). Never commit it.
+// define('OPENAI_API_KEY', '');
 
 // Optional SMTP overrides. Prefer System Settings, HostForge env
 // SMS2_SMTP_PASSWORD, or storage/keys/smtp_app_password (gitignored).

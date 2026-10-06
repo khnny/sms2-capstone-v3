@@ -73,6 +73,32 @@
                 applyFilters();
             });
         });
+        var announcementModal = document.getElementById('communicationAnnouncementModal');
+        root.addEventListener('click', function (event) {
+            var detailButton = event.target.closest('[data-ann-detail]');
+            if (detailButton && announcementModal && window.bootstrap && window.bootstrap.Modal) {
+                announcementModal.querySelector('#communicationAnnouncementTitle').textContent = detailButton.dataset.title || '';
+                announcementModal.querySelector('[data-ann-modal-body]').textContent = detailButton.dataset.body || '';
+                announcementModal.querySelector('[data-ann-modal-meta]').textContent = [
+                    detailButton.dataset.category,
+                    detailButton.dataset.status,
+                    detailButton.dataset.audience,
+                    detailButton.dataset.date,
+                    detailButton.dataset.expiry ? 'Until ' + detailButton.dataset.expiry : '',
+                    detailButton.dataset.author
+                ].filter(Boolean).join(' · ');
+                var announcementImage = announcementModal.querySelector('[data-ann-modal-image]');
+                announcementImage.hidden = !detailButton.dataset.image;
+                if (detailButton.dataset.image) announcementImage.src = detailButton.dataset.image;
+                else announcementImage.removeAttribute('src');
+                window.bootstrap.Modal.getOrCreateInstance(announcementModal).show();
+            }
+        });
+        root.querySelectorAll('[data-confirm-delete]').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                if (!window.confirm('Delete this announcement? This cannot be undone.')) event.preventDefault();
+            });
+        });
         root.setAttribute('aria-busy', 'false');
         applyFilters();
     }
@@ -91,13 +117,13 @@
         var details = modalElement ? modalElement.querySelector('[data-event-details]') : null;
         var events = [];
         var view = 'month';
-        var cursor = new Date(2026, 9, 1);
+        var cursor = new Date();
 
         try {
             events = JSON.parse(eventsNode ? eventsNode.textContent : '[]');
             if (!Array.isArray(events)) throw new Error('Unexpected event data.');
         } catch (error) {
-            if (status) status.textContent = 'Demo calendar could not load. Refresh the page to try again.';
+            if (status) status.textContent = 'Calendar could not load. Refresh the page to try again.';
             if (loading) loading.hidden = true;
             root.setAttribute('aria-busy', 'false');
             return;

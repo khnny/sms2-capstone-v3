@@ -92,7 +92,7 @@ if ($isCradPage && strpos(' ' . $bodyClass . ' ', ' crad-app ') === false) {
     <link href="<?= BASE_URL ?>/assets/css/loader.css?v=6" rel="stylesheet">
     <link href="<?= BASE_URL ?>/assets/css/sms-security-ui.css?v=20" rel="stylesheet">
     <link href="<?= BASE_URL ?>/assets/css/password-strength.css?v=2" rel="stylesheet">
-    <link href="<?= BASE_URL ?>/assets/css/research-monitoring.css?v=2" rel="stylesheet">
+    <link href="<?= BASE_URL ?>/assets/css/research-monitoring.css?v=4" rel="stylesheet">
     <?php else: ?>
     <link href="<?= BASE_URL ?>/assets/css/welcome.css?v=8" rel="stylesheet">
     <link href="<?= BASE_URL ?>/assets/css/auth-transition.css?v=8" rel="stylesheet">
@@ -102,8 +102,8 @@ if ($isCradPage && strpos(' ' . $bodyClass . ' ', ' crad-app ') === false) {
     <link href="<?= BASE_URL ?>/modules/crad/assets/css/crad-ui.css?v=12" rel="stylesheet">
     <?php endif; ?>
     <link href="<?= BASE_URL ?>/assets/css/app-redesign.css?v=8" rel="stylesheet">
-    <link href="<?= BASE_URL ?>/assets/css/communication-prototype.css?v=1" rel="stylesheet">
-    <link href="<?= BASE_URL ?>/assets/css/dashboard-workspace.css?v=1" rel="stylesheet">
+    <link href="<?= BASE_URL ?>/assets/css/communication-prototype.css?v=2" rel="stylesheet">
+    <link href="<?= BASE_URL ?>/assets/css/dashboard-workspace.css?v=2" rel="stylesheet">
     <?php if ($isWelcomeLanding): ?>
     <link href="<?= BASE_URL ?>/assets/css/welcome-site.css?v=3" rel="stylesheet">
     <?php endif; ?>

@@ -233,8 +233,9 @@ require_once __DIR__ . '/../../includes/layout-start.php';
         $studentAnnouncements = array_slice($studentAnnouncementRows, 0, 3);
         $studentAnnStamp = smsAnnouncementStamp($studentAnnouncementRows);
         require_once ROOT_PATH . '/communication/prototype-data.php';
+        require_once ROOT_PATH . '/communication/defense-calendar.php';
         $studentUpcomingEvents = array_values(array_filter(
-            smsCommunicationDemoEvents(),
+            smsCommunicationEventsWithOfficialDefenses(smsCommunicationDemoEvents()),
             static fn(array $event): bool => $event['date'] >= date('Y-m-d')
                 && in_array($event['type'], ['Deadline', 'Defense'], true)
                 && str_contains($event['audience'], 'Research students')
@@ -277,12 +278,12 @@ require_once __DIR__ . '/../../includes/layout-start.php';
                 <div class="card-body">
                     <div class="student-dashboard-section-heading">
                         <div>
-                            <span class="student-dashboard-kicker">Demo schedule</span>
+                            <span class="student-dashboard-kicker">Research schedule</span>
                             <h2 id="studentUpcomingTitle">Upcoming research events</h2>
                         </div>
                         <a href="<?= BASE_URL ?>/communication/calendar.php">View calendar</a>
                     </div>
-                    <p class="student-dashboard-meta">Sample only · not live CRAD schedules.</p>
+                    <p class="student-dashboard-meta">Finalized CRAD defense schedules appear here for your research group.</p>
                     <?php if ($studentUpcomingEvents): ?>
                         <ul class="student-dashboard-event-list">
                             <?php foreach ($studentUpcomingEvents as $event): ?>
@@ -298,7 +299,7 @@ require_once __DIR__ . '/../../includes/layout-start.php';
                             <?php endforeach; ?>
                         </ul>
                     <?php else: ?>
-                        <p class="student-dashboard-empty mb-0">No upcoming sample research events.</p>
+                        <p class="student-dashboard-empty mb-0">No upcoming research events.</p>
                     <?php endif; ?>
                 </div>
             </section>

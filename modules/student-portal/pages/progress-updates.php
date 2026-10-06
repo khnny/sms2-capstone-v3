@@ -187,6 +187,11 @@ try {
                                 </label>
                                 <input type="file" class="form-control" id="document" name="document" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
                                 <div class="form-text">Allowed: PDF, DOC, DOCX, JPG, PNG. Max 10 MB.</div>
+                                <div class="student-file-selection" id="documentSelection" hidden aria-live="polite">
+                                    <span><?= smsIcon('file-text', ['aria-hidden' => 'true']) ?></span>
+                                    <div><strong id="documentSelectionName"></strong><small id="documentSelectionMeta"></small></div>
+                                    <span class="student-file-selection-state">Selected · not submitted</span>
+                                </div>
                             </div>
 
                             <!-- Update Title -->
@@ -382,6 +387,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const currentProgressDisplay = document.getElementById('current_progress_display');
     const statusSelect           = document.getElementById('milestone_status');
     const documentInput          = document.getElementById('document');
+    const documentSelection      = document.getElementById('documentSelection');
+    const documentSelectionName  = document.getElementById('documentSelectionName');
+    const documentSelectionMeta  = document.getElementById('documentSelectionMeta');
     const documentRequiredMarker = document.getElementById('document_required_marker');
     const submitBtn              = document.getElementById('submitBtn');
     const pendingReviewState     = document.getElementById('pending_review_state');
@@ -391,6 +399,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     progressInput.addEventListener('input', function() {
         progressDisplay.textContent = this.value;
+    });
+
+    documentInput.addEventListener('change', function() {
+        const file = this.files && this.files[0];
+        if (!file) {
+            documentSelection.hidden = true;
+            return;
+        }
+        const extension = file.name.includes('.') ? file.name.split('.').pop().toUpperCase() : 'FILE';
+        const size = file.size >= 1048576
+            ? (file.size / 1048576).toFixed(1) + ' MB'
+            : Math.max(1, Math.round(file.size / 1024)) + ' KB';
+        documentSelectionName.textContent = file.name;
+        documentSelectionMeta.textContent = extension + ' · ' + size;
+        documentSelection.hidden = false;
     });
 
     // ------------------------------------------------------------------ //

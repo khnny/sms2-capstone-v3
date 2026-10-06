@@ -151,7 +151,7 @@ function smsCommunicationDemoEvents(): array
             'research_group' => 'Group 2026-014 · Project SALINLAHI',
             'audience' => 'Research students & panel',
             'status' => 'Scheduled',
-            'description' => 'Proposal presentation and panel question period for the fictional sample group.',
+            'description' => 'Proposal presentation and panel question period for the assigned research group.',
         ],
         [
             'id' => 'evt-4',
@@ -164,7 +164,7 @@ function smsCommunicationDemoEvents(): array
             'research_group' => 'Group 2026-021 · Project GABAY',
             'audience' => 'Faculty & panel',
             'status' => 'Scheduled',
-            'description' => 'Panel members review the sample proposal and submit evaluation notes.',
+            'description' => 'Panel members review the proposal and submit evaluation notes.',
         ],
         [
             'id' => 'evt-5',
@@ -190,7 +190,7 @@ function smsCommunicationDemoEvents(): array
             'research_group' => 'Group 2026-021 · Project GABAY',
             'audience' => 'Research students & panel',
             'status' => 'Scheduled',
-            'description' => 'Pre-oral presentation and feedback session for the fictional sample group.',
+            'description' => 'Pre-oral presentation and feedback session for the assigned research group.',
         ],
         [
             'id' => 'evt-7',
@@ -203,7 +203,7 @@ function smsCommunicationDemoEvents(): array
             'research_group' => 'Group 2026-008 · Project TALA',
             'audience' => 'Everyone',
             'status' => 'Scheduled',
-            'description' => 'Short research presentation and moderated discussion for the demo cohort.',
+            'description' => 'Short research presentation and moderated discussion for participating groups.',
         ],
         [
             'id' => 'evt-8',

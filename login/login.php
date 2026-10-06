@@ -1284,6 +1284,7 @@ html[data-theme="dark"] .login-glass .sms-cf-widget.is-verified {
             </fieldset>
             <div class="login-links">
                 <a href="<?= BASE_URL ?>/login/forgot-password.php" data-auth-transition data-auth-direction="left">Forgot password?</a>
+                <a class="panelist-apply-link" href="<?= e(BASE_URL . '/login/panelist-application.php') ?>">Apply as Research Panelist</a>
             </div>
         <?php else: ?>
         <form method="POST" action="" novalidate id="loginForm" autocomplete="off">
@@ -1331,6 +1332,7 @@ html[data-theme="dark"] .login-glass .sms-cf-widget.is-verified {
             </button>
             <div class="login-links">
                 <a href="<?= BASE_URL ?>/login/forgot-password.php" data-auth-transition data-auth-direction="left">Forgot password?</a>
+                <a class="panelist-apply-link" href="<?= e(BASE_URL . '/login/panelist-application.php') ?>">Apply as Research Panelist</a>
             </div>
         </form>
         <script src="<?= BASE_URL ?>/assets/js/passkey.js?v=12"></script>

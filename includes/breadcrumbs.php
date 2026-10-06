@@ -33,14 +33,11 @@ function renderBreadcrumbs(array $breadcrumbs): void
         renderModulePageBanner($breadcrumbs);
     endif;
 
-    $scriptPath = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
-    $roleKey = (string) ($GLOBALS['layoutRoleKey'] ?? '');
-    $isSharedDashboard = str_ends_with($scriptPath, '/dashboard/index.php')
-        && $roleKey !== ''
-        && $roleKey !== 'student';
-    if (!empty($GLOBALS['isRoleDashboardHome']) || $isSharedDashboard) {
+    if (!empty($GLOBALS['isRoleDashboardHome'])) {
         require ROOT_PATH . '/communication/dashboard-announcements.php';
+        require ROOT_PATH . '/communication/dashboard-widgets.php';
     }
+
 }
 
 function renderModulePageBanner(array $breadcrumbs): void

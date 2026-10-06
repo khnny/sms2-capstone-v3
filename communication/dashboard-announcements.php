@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/prototype-data.php';
+require_once ROOT_PATH . '/includes/announcements.php';
 
 $dashboardAnnouncementRole = function_exists('getCurrentUserRoleKey')
     ? getCurrentUserRoleKey()
@@ -7,41 +7,13 @@ $dashboardAnnouncementRole = function_exists('getCurrentUserRoleKey')
 if (function_exists('smsNormalizeRoleKey')) {
     $dashboardAnnouncementRole = smsNormalizeRoleKey($dashboardAnnouncementRole);
 }
-$dashboardAnnouncementAudiences = in_array(
-    $dashboardAnnouncementRole,
-    [
-        'adviser',
-        'panel',
-        'grammarian',
-        'research_director',
-        'research_coordinator',
-        'department_head',
-        'crad_officer',
-        'research_grant',
-        'review_committee',
-        'department_chair',
-        'research_office',
-        'vpaa',
-    ],
-    true
-)
-    ? ['Faculty & panel', 'Everyone']
-    : ['Everyone'];
-$dashboardAnnouncements = array_values(array_filter(
-    smsCommunicationDemoAnnouncements(),
-    static fn(array $announcement): bool => $announcement['status'] === 'Published'
-        && in_array($announcement['audience'], $dashboardAnnouncementAudiences, true)
-));
-usort(
-    $dashboardAnnouncements,
-    static fn(array $a, array $b): int => strcmp($b['published_at'], $a['published_at'])
-);
+$dashboardAnnouncements = smsAnnouncementFetch(true, 20, $dashboardAnnouncementRole);
 $dashboardAnnouncements = array_slice($dashboardAnnouncements, 0, 2);
 ?>
 <section class="dashboard-announcements" aria-labelledby="dashboardImportantAnnouncements">
     <div class="dashboard-announcements-heading">
         <div>
-            <span class="dashboard-announcements-kicker">Prototype data · not live notices</span>
+            <span class="dashboard-announcements-kicker">For your audience</span>
             <h2 id="dashboardImportantAnnouncements">Important announcements</h2>
         </div>
         <a href="<?= e(BASE_URL . '/communication/announcements.php') ?>">View all <span aria-hidden="true">→</span></a>
@@ -50,20 +22,20 @@ $dashboardAnnouncements = array_slice($dashboardAnnouncements, 0, 2);
         <ul class="dashboard-announcements-list">
             <?php foreach ($dashboardAnnouncements as $announcement): ?>
                 <li>
-                    <span class="dashboard-announcement-category <?= e(strtolower($announcement['category'])) ?>">
-                        <?= e($announcement['category']) ?>
+                    <span class="dashboard-announcement-category <?= e(strtolower((string) $announcement['category'])) ?>">
+                        <?= e((string) $announcement['category']) ?>
                     </span>
                     <div>
-                        <strong><?= e($announcement['title']) ?></strong>
-                        <p><?= e($announcement['description']) ?></p>
+                        <strong><?= e((string) $announcement['title']) ?></strong>
+                        <p><?= e(function_exists('mb_strimwidth') ? mb_strimwidth((string) $announcement['body'], 0, 150, '…') : substr((string) $announcement['body'], 0, 150)) ?></p>
                     </div>
-                    <time datetime="<?= e($announcement['published_at']) ?>">
-                        <?= e(smsCommunicationDemoDateLabel($announcement['published_at'])) ?>
+                    <time datetime="<?= e((string) ($announcement['scheduled_for'] ?: $announcement['date_iso'])) ?>">
+                        <?= e((string) ($announcement['published_label'] ?: $announcement['updated_label'])) ?>
                     </time>
                 </li>
             <?php endforeach; ?>
         </ul>
     <?php else: ?>
-        <p class="dashboard-announcements-empty">No relevant demo announcements right now.</p>
+        <p class="dashboard-announcements-empty">No current announcements for your audience.</p>
     <?php endif; ?>
 </section>
