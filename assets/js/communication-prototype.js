@@ -118,6 +118,13 @@
         var events = [];
         var view = 'month';
         var cursor = new Date();
+        var eventsUrl = root.getAttribute('data-events-url') || '';
+        var latestRequest = 0;
+        var eventLoadFailed = false;
+        var loadedRange = {
+            start: new Date(cursor.getFullYear(), cursor.getMonth(), 1),
+            end: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0)
+        };
 
         try {
             events = JSON.parse(eventsNode ? eventsNode.textContent : '[]');
@@ -195,7 +202,7 @@
         function renderList(filtered) {
             if (!eventList) return;
             var sorted = filtered.slice().sort(function (a, b) {
-                return a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time);
+                return a.starts_at.localeCompare(b.starts_at);
             });
             eventList.innerHTML = sorted.map(function (event) {
                 return '<article class="communication-event-list-card ' + escapeHtml(event.type.toLowerCase()) + '">'
@@ -231,7 +238,88 @@
             var visible = view === 'month' ? monthCount : filtered.length;
             if (calendarGrid) calendarGrid.hidden = view !== 'month' || visible === 0;
             if (eventList) eventList.hidden = view !== 'list' || visible === 0;
-            if (empty) empty.hidden = visible !== 0;
+            if (empty) empty.hidden = visible !== 0 || eventLoadFailed;
+        }
+
+        function isoDate(date) {
+            return [
+                date.getFullYear(),
+                String(date.getMonth() + 1).padStart(2, '0'),
+                String(date.getDate()).padStart(2, '0')
+            ].join('-');
+        }
+
+        function loadRange(start, end) {
+            if (!eventsUrl) {
+                if (status) status.textContent = 'Calendar could not load because its event service is unavailable.';
+                return;
+            }
+            var requestId = ++latestRequest;
+            eventLoadFailed = false;
+            if (loading) loading.hidden = false;
+            root.setAttribute('aria-busy', 'true');
+            if (status) status.textContent = '';
+            var query = new URLSearchParams({ start: isoDate(start), end: isoDate(end) });
+            fetch(eventsUrl + '?' + query.toString(), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                .then(function (response) {
+                    if (!response.ok) throw new Error('Calendar service returned ' + response.status + '.');
+                    return response.json();
+                })
+                .then(function (payload) {
+                    if (!payload || payload.ok !== true || !Array.isArray(payload.events)) {
+                        throw new Error('Calendar service returned invalid event data.');
+                    }
+                    if (requestId !== latestRequest) return;
+                    events = payload.events;
+                    eventLoadFailed = false;
+                    loadedRange = { start: start, end: end };
+                    render();
+                })
+                .catch(function (error) {
+                    if (requestId !== latestRequest) return;
+                    console.error('Calendar event request failed:', error);
+                    events = [];
+                    eventLoadFailed = true;
+                    render();
+                    if (status) status.textContent = 'Calendar events could not be loaded. Refresh the page or try a different date range.';
+                })
+                .finally(function () {
+                    if (requestId !== latestRequest) return;
+                    if (loading) loading.hidden = true;
+                    root.setAttribute('aria-busy', 'false');
+                });
+        }
+
+        function reloadCalendarRange() {
+            var from = '';
+            var to = '';
+            controls.forEach(function (control) {
+                if (control.getAttribute('data-event-filter') === 'from') from = control.value;
+                if (control.getAttribute('data-event-filter') === 'to') to = control.value;
+            });
+            if (from && to && from > to) {
+                render();
+                return;
+            }
+
+            var start;
+            var end;
+            if (from || to) {
+                var startValue = from || to;
+                var endValue = to || from;
+                start = dateFromIso(startValue);
+                end = dateFromIso(endValue);
+                if (!from) start.setDate(start.getDate() - 366);
+                if (!to) end.setDate(end.getDate() + 366);
+            } else {
+                start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+                end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+            }
+            if (isoDate(start) !== isoDate(loadedRange.start) || isoDate(end) !== isoDate(loadedRange.end)) {
+                loadRange(start, end);
+            } else {
+                render();
+            }
         }
 
         function setView(nextView) {
@@ -251,7 +339,8 @@
             details.innerHTML = '<p class="communication-event-description">' + escapeHtml(event.description) + '</p>'
                 + '<dl class="communication-event-details">'
                 + '<div><dt>Date</dt><dd>' + escapeHtml(formatIso(event.date, { dateStyle: 'full' })) + '</dd></div>'
-                + '<div><dt>Time</dt><dd>' + escapeHtml(event.start_time + ' – ' + event.end_time) + '</dd></div>'
+                + '<div><dt>Time</dt><dd>' + escapeHtml(event.start_time + (event.end_time ? ' – ' + event.end_time : '')) + '</dd></div>'
+                + '<div><dt>Time zone</dt><dd>' + escapeHtml(event.timezone) + '</dd></div>'
                 + '<div><dt>Location</dt><dd>' + escapeHtml(event.location) + '</dd></div>'
                 + '<div><dt>Research group</dt><dd>' + escapeHtml(event.research_group) + '</dd></div>'
                 + '<div><dt>Audience</dt><dd>' + escapeHtml(event.audience) + '</dd></div>'
@@ -268,8 +357,9 @@
         }
 
         controls.forEach(function (control) {
-            control.addEventListener('input', render);
-            control.addEventListener('change', render);
+            var filter = control.getAttribute('data-event-filter');
+            control.addEventListener('input', filter === 'from' || filter === 'to' ? reloadCalendarRange : render);
+            control.addEventListener('change', filter === 'from' || filter === 'to' ? reloadCalendarRange : render);
         });
         viewButtons.forEach(function (button) {
             button.addEventListener('click', function () {
@@ -279,27 +369,27 @@
         root.querySelectorAll('[data-calendar-prev]').forEach(function (button) {
             button.addEventListener('click', function () {
                 cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
-                render();
+                reloadCalendarRange();
             });
         });
         root.querySelectorAll('[data-calendar-next]').forEach(function (button) {
             button.addEventListener('click', function () {
                 cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-                render();
+                reloadCalendarRange();
             });
         });
         root.querySelectorAll('[data-calendar-today]').forEach(function (button) {
             button.addEventListener('click', function () {
                 var today = new Date();
                 cursor = new Date(today.getFullYear(), today.getMonth(), 1);
-                render();
+                reloadCalendarRange();
             });
         });
         root.querySelectorAll('[data-event-reset]').forEach(function (button) {
             button.addEventListener('click', function () {
                 controls.forEach(function (control) { control.value = ''; });
                 if (status) status.textContent = '';
-                render();
+                reloadCalendarRange();
             });
         });
         root.addEventListener('click', function (event) {
@@ -308,6 +398,7 @@
         });
         root.setAttribute('aria-busy', 'false');
         render();
+        if (eventsUrl) loadRange(loadedRange.start, loadedRange.end);
     }
 
     document.addEventListener('DOMContentLoaded', function () {

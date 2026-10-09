@@ -1,31 +1,23 @@
 <?php
 require_once ROOT_PATH . '/config/database.php';
-require_once __DIR__ . '/prototype-data.php';
-require_once __DIR__ . '/defense-calendar.php';
-
-$communicationEvents = smsCommunicationEventsWithOfficialDefenses(smsCommunicationDemoEvents());
-$communicationToday = date('Y-m-d');
-$communicationRole = function_exists('smsNormalizeRoleKey') ? smsNormalizeRoleKey(getCurrentUserRoleKey()) : getCurrentUserRoleKey();
-$communicationAudiences = smsCanManageDefenseScheduling($communicationRole)
-    ? ['Everyone', 'Faculty & panel', 'Research students & panel']
-    : ($communicationRole === 'student'
-    ? ['Everyone', 'Research students', 'Research students & panel']
-    : (in_array($communicationRole, ['adviser', 'panel', 'research_coordinator', 'department_head', 'crad_officer', 'research_director', 'department_chair', 'grammarian'], true)
-        ? ['Everyone', 'Faculty & panel', 'Research students & panel']
-        : ['Everyone']));
-$communicationUpcomingEvents = array_values(array_filter(
-    $communicationEvents,
-    static function (array $event) use ($communicationToday, $communicationAudiences): bool {
-        $startsAt = strtotime($event['date'] . ' ' . $event['start_time']);
-        return $event['date'] >= $communicationToday
-            && $startsAt !== false
-            && $startsAt >= time()
-            && in_array($event['audience'], $communicationAudiences, true);
-    }
-));
+require_once __DIR__ . '/event-provider.php';
+$communicationTimezone = new DateTimeZone('Asia/Manila');
+$communicationToday = new DateTimeImmutable('today', $communicationTimezone);
+$communicationEventsUnavailable = false;
+try {
+    $communicationUpcomingEvents = smsCalendarUpcomingEvents(
+        $communicationToday,
+        $communicationToday->modify('+14 days'),
+        ['Deadline', 'Defense']
+    );
+} catch (Throwable $e) {
+    error_log('Communication dashboard calendar load failed: ' . $e->getMessage());
+    $communicationUpcomingEvents = [];
+    $communicationEventsUnavailable = true;
+}
 usort(
     $communicationUpcomingEvents,
-    static fn(array $a, array $b): int => strcmp($a['date'], $b['date'])
+    static fn(array $a, array $b): int => strcmp($a['starts_at'], $b['starts_at'])
 );
 $communicationUpcomingEvents = array_slice($communicationUpcomingEvents, 0, 3);
 $communicationRecentActivity = [];
@@ -58,7 +50,7 @@ try {
             <div class="communication-panel-heading">
                 <div>
                     <h3 id="dashboardUpcomingTitle">Upcoming research events</h3>
-                    <p>Deadlines, consultations, and defense schedules</p>
+                    <p>Research deadlines and defense schedules</p>
                 </div>
                 <a href="<?= e(BASE_URL . '/communication/calendar.php') ?>">View calendar <span aria-hidden="true">→</span></a>
             </div>
@@ -67,19 +59,19 @@ try {
                     <?php foreach ($communicationUpcomingEvents as $event): ?>
                         <li>
                             <time datetime="<?= e($event['date']) ?>">
-                                <strong><?= e(smsCommunicationDemoDateLabel($event['date'], 'M d')) ?></strong>
-                                <span><?= e(smsCommunicationDemoDateLabel($event['date'], 'D')) ?></span>
+                                <strong><?= e((new DateTimeImmutable($event['date'], $communicationTimezone))->format('M d')) ?></strong>
+                                <span><?= e((new DateTimeImmutable($event['date'], $communicationTimezone))->format('D')) ?></span>
                             </time>
                             <div>
                                 <strong><?= e($event['title']) ?></strong>
-                                <span><?= e($event['start_time']) ?> · <?= e($event['location']) ?></span>
+                                <span><?= e($event['start_time']) ?><?= $event['end_time'] !== '' ? ' – ' . e($event['end_time']) : '' ?> · <?= e($event['location']) ?></span>
                             </div>
                             <span class="communication-type-pill <?= e(strtolower($event['type'])) ?>"><?= e($event['type']) ?></span>
                         </li>
                     <?php endforeach; ?>
                 </ul>
             <?php else: ?>
-                <p class="communication-empty">No upcoming events.</p>
+                <p class="communication-empty"><?= $communicationEventsUnavailable ? 'Upcoming events are temporarily unavailable.' : 'No upcoming events.' ?></p>
             <?php endif; ?>
         </section>
         <section class="communication-dashboard-panel" aria-labelledby="dashboardActivityTitle">

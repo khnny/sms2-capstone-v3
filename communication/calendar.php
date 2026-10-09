@@ -10,29 +10,28 @@ $activeModule = '';
 $activePage = 'communication-calendar';
 $breadcrumbs = [['label' => 'Communication', 'url' => null], ['label' => 'Research Calendar', 'url' => null]];
 require_once ROOT_PATH . '/includes/breadcrumbs.php';
+$calendarTimezone = new DateTimeZone('Asia/Manila');
+$calendarMonthLabel = (new DateTimeImmutable('first day of this month', $calendarTimezone))->format('F Y');
 ?>
 <?php require_once ROOT_PATH . '/includes/layout-start.php'; ?>
-<?php require_once __DIR__ . '/prototype-data.php'; ?>
-<?php
-require_once __DIR__ . '/defense-calendar.php';
-$events = smsCommunicationEventsWithOfficialDefenses(smsCommunicationDemoEvents());
-$eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
-?>
+<?php $eventJson = '[]'; ?>
 <?php renderBreadcrumbs($breadcrumbs); ?>
 
-<main class="communication-prototype" data-communication-page="calendar" aria-busy="true">
+<main class="communication-prototype" data-communication-page="calendar"
+      data-events-url="<?= e(BASE_URL . '/communication/calendar-events.php') ?>"
+      aria-busy="true">
     <header class="communication-page-header">
         <div>
             <span class="communication-kicker">Research communication</span>
             <h1>Research calendar &amp; bulletin</h1>
-            <p>One compact view of deadlines, consultations, evaluations, and defense schedules.</p>
+            <p>Authorized CRAD defense schedules and research deadlines from their source records.</p>
         </div>
     </header>
 
     <section class="communication-calendar-toolbar" aria-label="Calendar controls">
         <div class="communication-calendar-month-nav">
             <button type="button" class="btn btn-sm btn-outline-secondary" data-calendar-prev aria-label="Previous month"><?= smsIcon('chevron-left', ['aria-hidden' => 'true']) ?></button>
-            <h2 data-calendar-month-label>October 2026</h2>
+            <h2 data-calendar-month-label><?= e($calendarMonthLabel) ?></h2>
             <button type="button" class="btn btn-sm btn-outline-secondary" data-calendar-next aria-label="Next month"><?= smsIcon('chevron-right', ['aria-hidden' => 'true']) ?></button>
             <button type="button" class="btn btn-sm btn-outline-primary" data-calendar-today>Today</button>
         </div>
@@ -51,7 +50,7 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
             <label>Event type
                 <select class="form-select" data-event-filter="type">
                     <option value="">All event types</option>
-                    <option>Deadline</option><option>Defense</option><option>Consultation</option><option>Evaluation</option><option>Presentation</option><option>Research</option>
+                    <option>Deadline</option><option>Defense</option>
                 </select>
             </label>
             <label>Audience
@@ -62,7 +61,7 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
             </label>
             <label>Status
                 <select class="form-select" data-event-filter="status">
-                    <option value="">All statuses</option><option>Upcoming</option><option>Scheduled</option>
+                    <option value="">All statuses</option><option>Scheduled</option><option>Rescheduled</option><option>Cancelled</option><option>Canceled</option><option>Finalized</option><option>Final</option><option>Active</option><option>Not Started</option><option>In Progress</option><option>Submitted for Review</option><option>Revision Requested</option><option>Approved</option><option>Completed</option>
                 </select>
             </label>
             <label>From date<input class="form-control" type="date" data-event-filter="from"></label>
@@ -79,7 +78,6 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
         </div>
         <div class="communication-calendar-legend">
             <span><i class="deadline"></i> Deadline</span><span><i class="defense"></i> Defense</span>
-            <span><i class="consultation"></i> Consultation</span><span><i class="evaluation"></i> Evaluation</span>
         </div>
         <div class="communication-calendar-grid" data-calendar-grid role="grid" aria-label="Monthly research calendar"></div>
         <div class="communication-event-list" data-event-list hidden></div>
@@ -106,5 +104,5 @@ $eventJson = json_encode($events, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | 
         </div>
     </div>
 </div>
-<script src="<?= e(BASE_URL . '/assets/js/communication-prototype.js?v=2') ?>" defer></script>
+<script src="<?= e(BASE_URL . '/assets/js/communication-prototype.js?v=3') ?>" defer></script>
 <?php require_once ROOT_PATH . '/includes/layout-end.php'; ?>

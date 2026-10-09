@@ -237,7 +237,7 @@ $cradOfficerTabs = [
 $renderWorkspaceTabs = static function (string $prefix, array $tabs) use ($url, $e): void {
     ?>
     <div>
-        <div class="nav nav-tabs mb-3" role="tablist" aria-label="<?= $e($prefix) ?> workflow sections">
+        <div class="nav sms-workspace-tabs" role="tablist" aria-label="<?= $e($prefix) ?> workflow sections">
             <?php foreach ($tabs as $index => $tab): ?>
                 <?php $tabId = $prefix . '-' . $tab['id']; ?>
                 <button
@@ -259,21 +259,20 @@ $renderWorkspaceTabs = static function (string $prefix, array $tabs) use ($url, 
                 role="tabpanel"
                 aria-labelledby="<?= $e($tabId) ?>-tab"
                 tabindex="0"
+                class="sms-workspace-panel"
                 data-workspace-panel
                 <?= $index === 0 ? '' : 'hidden' ?>
             >
-                <h4 class="h6"><?= $e($tab['heading']) ?></h4>
-                <p class="text-muted"><?= $e($tab['description']) ?></p>
-                <div class="list-group list-group-flush">
+                <h3><?= $e($tab['heading']) ?></h3>
+                <p class="text-muted mb-0"><?= $e($tab['description']) ?></p>
+                <div class="sms-workspace-link-list">
                     <?php foreach ($tab['links'] as $link): ?>
-                        <a class="list-group-item list-group-item-action px-0" href="<?= $e($url($link['page'])) ?>">
-                            <span class="d-flex align-items-start justify-content-between gap-3">
-                                <span>
-                                    <span class="d-block fw-semibold"><?= $e($link['title']) ?></span>
-                                    <span class="d-block small text-muted"><?= $e($link['description']) ?></span>
-                                </span>
-                                <span class="text-primary" aria-hidden="true"><i class="fas fa-arrow-right"></i></span>
+                        <a class="sms-workspace-link" href="<?= $e($url($link['page'])) ?>">
+                            <span>
+                                <strong><?= $e($link['title']) ?></strong>
+                                <small><?= $e($link['description']) ?></small>
                             </span>
+                            <span class="sms-workspace-link-icon" aria-hidden="true"><i class="fas fa-arrow-right"></i></span>
                         </a>
                     <?php endforeach; ?>
                 </div>
@@ -286,51 +285,51 @@ $renderWorkspaceTabs = static function (string $prefix, array $tabs) use ($url, 
 require_once ROOT_PATH . '/includes/layout-start.php';
 renderBreadcrumbs($breadcrumbs);
 ?>
-<main class="container-fluid">
-    <section class="mb-4" aria-labelledby="workspace-heading">
-        <h2 id="workspace-heading" class="h4">Research Workspace</h2>
-        <p class="text-muted mb-0">
-            Signed in as <?= $e(getCurrentUserName()) ?>.
-            Use the sections to move between your workflow queues and progress tools. Live records and all changes remain on the existing guarded pages.
-        </p>
-    </section>
+<div class="sms-role-workspace sms-crad-workspace">
+    <header class="sms-role-workspace-header" aria-labelledby="workspace-heading">
+        <div>
+            <span class="dash-kicker"><?= $isDepartmentHead ? 'Department research' : ($isCoordinator ? 'Research coordination' : 'CRAD operations') ?></span>
+            <h1 id="workspace-heading">Research Workspace</h1>
+            <p>
+                Signed in as <?= $e(getCurrentUserName()) ?>.
+                Continue with the existing role-authorized workflow queues. Records and decisions remain on their established pages.
+            </p>
+        </div>
+        <a class="btn btn-outline-primary flex-shrink-0" href="<?= $e(BASE_URL . '/communication/calendar.php') ?>">
+            <i class="fas fa-calendar-alt me-1" aria-hidden="true"></i> Research calendar
+        </a>
+    </header>
 
     <?php if ($isDepartmentHead): ?>
-        <section class="mb-4" aria-labelledby="department-head-workflow">
-            <div class="card">
+        <section class="sms-role-workspace-section" aria-labelledby="department-head-workflow">
                 <div class="card-body">
-                    <h3 id="department-head-workflow" class="h5">Department Head</h3>
-                    <p class="text-muted">Move from research-group decisions to assignments for eligible groups.</p>
+                    <h2 id="department-head-workflow">Department Head</h2>
+                    <p>Move from research-group decisions to assignments for eligible groups.</p>
                     <?php $renderWorkspaceTabs('department-head', $departmentHeadTabs); ?>
                 </div>
-            </div>
         </section>
     <?php endif; ?>
 
     <?php if ($isCoordinator): ?>
-        <section class="mb-4" aria-labelledby="coordinator-workflow">
-            <div class="card">
+        <section class="sms-role-workspace-section" aria-labelledby="coordinator-workflow">
                 <div class="card-body">
-                    <h3 id="coordinator-workflow" class="h5">Research Coordinator</h3>
-                    <p class="text-muted">Work through assignment confirmation, title screening, research oversight, manuscript progress, and outputs.</p>
+                    <h2 id="coordinator-workflow">Research Coordinator</h2>
+                    <p>Work through assignment confirmation, title screening, research oversight, manuscript progress, and outputs.</p>
                     <?php $renderWorkspaceTabs('coordinator', $coordinatorTabs); ?>
                 </div>
-            </div>
         </section>
     <?php endif; ?>
 
     <?php if ($isCradOfficer || $isModuleAdmin): ?>
-        <section class="mb-4" aria-labelledby="crad-officer-workflow">
-            <div class="card">
+        <section class="sms-role-workspace-section" aria-labelledby="crad-officer-workflow">
                 <div class="card-body">
-                    <h3 id="crad-officer-workflow" class="h5">CRAD Officer</h3>
-                    <p class="text-muted">Work from proposal intake and the official registry through review, research progress, and outputs.</p>
+                    <h2 id="crad-officer-workflow">CRAD Officer</h2>
+                    <p>Work from proposal intake and the official registry through review, research progress, and outputs.</p>
                     <?php $renderWorkspaceTabs('crad-officer', $cradOfficerTabs); ?>
                 </div>
-            </div>
         </section>
     <?php endif; ?>
-</main>
+</div>
 <script>
 document.querySelectorAll('[role="tablist"]').forEach(function (tabList) {
     var tabs = Array.prototype.slice.call(tabList.querySelectorAll('[data-workspace-tab]'));

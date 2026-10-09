@@ -229,18 +229,28 @@ require_once __DIR__ . '/../../includes/layout-start.php';
 
     <?php if ($studentPortalPage === 'dashboard'): ?>
         <?php
-        $studentAnnouncementRows = smsAnnouncementPublicRows(smsAnnouncementFetch(true, 20));
+        $studentAnnouncementRole = function_exists('smsNormalizeRoleKey')
+            ? smsNormalizeRoleKey((string) getCurrentUserRoleKey())
+            : (string) getCurrentUserRoleKey();
+        $studentAnnouncementRows = smsAnnouncementPublicRows(smsAnnouncementFetch(true, 20, $studentAnnouncementRole));
         $studentAnnouncements = array_slice($studentAnnouncementRows, 0, 3);
         $studentAnnStamp = smsAnnouncementStamp($studentAnnouncementRows);
-        require_once ROOT_PATH . '/communication/prototype-data.php';
-        require_once ROOT_PATH . '/communication/defense-calendar.php';
-        $studentUpcomingEvents = array_values(array_filter(
-            smsCommunicationEventsWithOfficialDefenses(smsCommunicationDemoEvents()),
-            static fn(array $event): bool => $event['date'] >= date('Y-m-d')
-                && in_array($event['type'], ['Deadline', 'Defense'], true)
-                && str_contains($event['audience'], 'Research students')
-        ));
-        usort($studentUpcomingEvents, static fn(array $a, array $b): int => strcmp($a['date'], $b['date']));
+        require_once ROOT_PATH . '/communication/event-provider.php';
+        $studentCalendarTimezone = new DateTimeZone('Asia/Manila');
+        $studentCalendarToday = new DateTimeImmutable('today', $studentCalendarTimezone);
+        $studentEventsUnavailable = false;
+        try {
+            $studentUpcomingEvents = smsCalendarUpcomingEvents(
+                $studentCalendarToday,
+                $studentCalendarToday->modify('+14 days'),
+                ['Deadline', 'Defense']
+            );
+        } catch (Throwable $e) {
+            error_log('Student dashboard calendar load failed: ' . $e->getMessage());
+            $studentUpcomingEvents = [];
+            $studentEventsUnavailable = true;
+        }
+        usort($studentUpcomingEvents, static fn(array $a, array $b): int => strcmp($a['starts_at'], $b['starts_at']));
         $studentUpcomingEvents = array_slice($studentUpcomingEvents, 0, 2);
         $studentResearchAction = match ($researchCurrentStatus) {
             'Not Started' => 'Start your research workflow',
@@ -283,21 +293,23 @@ require_once __DIR__ . '/../../includes/layout-start.php';
                         </div>
                         <a href="<?= BASE_URL ?>/communication/calendar.php">View calendar</a>
                     </div>
-                    <p class="student-dashboard-meta">Finalized CRAD defense schedules appear here for your research group.</p>
+                    <p class="student-dashboard-meta">Authorized defense schedules and research milestones for your group appear here.</p>
                     <?php if ($studentUpcomingEvents): ?>
                         <ul class="student-dashboard-event-list">
                             <?php foreach ($studentUpcomingEvents as $event): ?>
                                 <li>
                                     <time datetime="<?= htmlspecialchars($event['date']) ?>">
-                                        <strong><?= htmlspecialchars(date('M d', strtotime($event['date']))) ?></strong>
+                                        <strong><?= htmlspecialchars((new DateTimeImmutable($event['date'], $studentCalendarTimezone))->format('M d')) ?></strong>
                                     </time>
                                     <div>
                                         <strong><?= htmlspecialchars($event['title']) ?></strong>
-                                        <span><?= htmlspecialchars($event['start_time']) ?> · <?= htmlspecialchars($event['location']) ?></span>
+                                        <span><?= htmlspecialchars($event['start_time']) ?><?= $event['end_time'] !== '' ? ' – ' . htmlspecialchars($event['end_time']) : '' ?> · <?= htmlspecialchars($event['location']) ?></span>
                                     </div>
                                 </li>
                             <?php endforeach; ?>
                         </ul>
+                    <?php elseif ($studentEventsUnavailable): ?>
+                        <p class="student-dashboard-empty mb-0">Upcoming events are temporarily unavailable.</p>
                     <?php else: ?>
                         <p class="student-dashboard-empty mb-0">No upcoming research events.</p>
                     <?php endif; ?>

@@ -61,13 +61,14 @@ require_once ROOT_PATH . '/includes/layout-start.php';
 renderBreadcrumbs($breadcrumbs);
 ?>
 
-<main class="glass-dashboard" aria-labelledby="workspace-title">
+<div class="glass-dashboard sms-role-workspace sms-adviser-workspace" aria-labelledby="workspace-title">
     <div class="glass-board">
-        <section class="glass-panel mb-4" aria-labelledby="workspace-title">
+        <header class="glass-panel sms-role-workspace-section mb-4 sms-role-workspace-header" aria-labelledby="workspace-title">
             <div class="glass-panel-body">
                 <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
                     <div>
-                        <h2 class="h4 mb-2" id="workspace-title">Your Research Workspace</h2>
+                        <span class="dash-kicker">Adviser workspace</span>
+                        <h1 id="workspace-title">Your Research Workspace</h1>
                         <p class="text-muted mb-0">
                             Choose a workflow below. Assignment confirmations, title decisions, progress actions,
                             and feedback are handled by their existing pages, which remain the source of truth.
@@ -79,9 +80,9 @@ renderBreadcrumbs($breadcrumbs);
                     </a>
                 </div>
             </div>
-        </section>
+        </header>
 
-        <nav class="glass-panel mb-4" aria-label="Research workspace sections">
+        <nav class="glass-panel sms-role-workspace-section mb-4" aria-label="Research workspace sections">
             <div class="glass-panel-body">
                 <h2 class="h5 mb-3">Workspace sections</h2>
                 <ul class="nav nav-pills flex-wrap gap-2">
@@ -95,7 +96,7 @@ renderBreadcrumbs($breadcrumbs);
         </nav>
 
         <div class="d-flex flex-column gap-3">
-            <section class="glass-panel" id="assignments" aria-labelledby="assignments-title">
+            <section class="glass-panel sms-role-workspace-section" id="assignments" aria-labelledby="assignments-title">
                 <div class="glass-panel-body">
                     <h2 class="h5" id="assignments-title">Assignment confirmation</h2>
                     <p class="text-muted">
@@ -108,7 +109,7 @@ renderBreadcrumbs($breadcrumbs);
                 </div>
             </section>
 
-            <section class="glass-panel" id="title-review" aria-labelledby="title-review-title">
+            <section class="glass-panel sms-role-workspace-section" id="title-review" aria-labelledby="title-review-title">
                 <div class="glass-panel-body">
                     <h2 class="h5" id="title-review-title">Title / proposal review</h2>
                     <p class="text-muted">
@@ -121,7 +122,7 @@ renderBreadcrumbs($breadcrumbs);
                 </div>
             </section>
 
-            <section class="glass-panel" id="groups-progress" aria-labelledby="groups-progress-title">
+            <section class="glass-panel sms-role-workspace-section" id="groups-progress" aria-labelledby="groups-progress-title">
                 <div class="glass-panel-body">
                     <h2 class="h5" id="groups-progress-title">Assigned groups / progress</h2>
                     <p class="text-muted">
@@ -143,7 +144,7 @@ renderBreadcrumbs($breadcrumbs);
                 </div>
             </section>
 
-            <section class="glass-panel" id="revision-cases" aria-labelledby="revision-cases-title">
+            <section class="glass-panel sms-role-workspace-section" id="revision-cases" aria-labelledby="revision-cases-title">
                 <div class="glass-panel-body">
                     <h2 class="h5" id="revision-cases-title">Revision cases</h2>
                     <p class="text-muted">
@@ -205,7 +206,7 @@ renderBreadcrumbs($breadcrumbs);
                 </div>
             </section>
 
-            <section class="glass-panel" id="feedback-history" aria-labelledby="feedback-history-title">
+            <section class="glass-panel sms-role-workspace-section" id="feedback-history" aria-labelledby="feedback-history-title">
                 <div class="glass-panel-body">
                     <h2 class="h5" id="feedback-history-title">Feedback / history</h2>
                     <p class="text-muted">
@@ -224,6 +225,6 @@ renderBreadcrumbs($breadcrumbs);
             </section>
         </div>
     </div>
-</main>
+</div>
 
 <?php require_once ROOT_PATH . '/includes/layout-end.php'; ?>
